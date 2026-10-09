@@ -1,0 +1,9 @@
+__pycache__
+__marimo__
+PTC_pn/
+
+onefile*
+2211.16337v1.pdf
+*.zip
+*.egg-info
+uv.lock
