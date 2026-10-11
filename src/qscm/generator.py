@@ -63,11 +63,7 @@ class ModelSpec:
     postprocess: Callable[..., nx.DiGraph] | None = None
 
 
-def graph_filename(
-    model: str,
-    regime: str,
-    nx_arguments: Mapping,
-) -> str:
+def graph_filename(model: str, regime: str, nx_arguments: Mapping) -> str:
     def format_value(value) -> str:
         if isinstance(value, float):
             return f"{value:.6g}"

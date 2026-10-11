@@ -83,6 +83,8 @@ def create_layout(
                                     "gap": "4px",
                                 },
                             ),
+                            html.Button("Reload graph", id="reload-graph", n_clicks=0),
+                            html.Button("Random graph", id="random-graph", n_clicks=0),
                             html.Button(
                                 "Pause layout",
                                 id="layout-toggle",

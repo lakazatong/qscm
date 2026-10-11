@@ -9,9 +9,9 @@ function(command, nClicks, fitClicks, initCount) {
         controller = {
             layout: null,
             timer: null,
-            manual: false,
             running: false,
             graphKey: null,
+            generation: 0,
         };
         window.qscmLayoutController = controller;
     }
@@ -22,20 +22,6 @@ function(command, nClicks, fitClicks, initCount) {
         });
     }
 
-    function stopLayout() {
-        if (controller.layout) {
-            controller.layout.stop();
-        }
-        controller.running = false;
-    }
-
-    function startLayout() {
-        if (controller.layout) {
-            controller.layout.run();
-            controller.running = true;
-        }
-    }
-
     function cancelTimer() {
         if (controller.timer !== null) {
             clearTimeout(controller.timer);
@@ -43,22 +29,38 @@ function(command, nClicks, fitClicks, initCount) {
         }
     }
 
-    function cola_layout() {
+    function stopLayout() {
+        if (controller.layout) {
+            controller.layout.stop();
+        }
+        controller.running = false;
+    }
+
+    function cancelCurrentRun() {
+        controller.generation += 1;
+        cancelTimer();
+        stopLayout();
+        controller.layout = null;
+    }
+
+    function colaOptions() {
         return {
             name: "cola",
             infinite: true,
             animate: true,
+            refresh: 16,
             fit: false,
-            refresh: 10,
-            ungrabifyWhileSimulating: false,
             avoidOverlap: true,
-            handleDisconnected: true,
+            handleDisconnected: false,
+            ungrabifyWhileSimulating: false,
 
             nodeSpacing: node => {
                 switch (node.data("role")) {
-                    case "feature": return 3;
-                    case "target": return 3;
-                    default: return 10;
+                    case "feature":
+                    case "target":
+                        return 3;
+                    default:
+                        return 10;
                 }
             },
 
@@ -66,38 +68,150 @@ function(command, nClicks, fitClicks, initCount) {
         };
     }
 
-    if (triggered === "layout-command" || triggered === "layout-init") {
+    function findComponents(cy) {
+        const remaining = new Set(cy.nodes().map(n => n.id()));
+        const components = [];
+
+        while (remaining.size > 0) {
+            const first = remaining.values().next().value;
+            const stack = [cy.getElementById(first)];
+            const nodes = [];
+
+            remaining.delete(first);
+
+            while (stack.length > 0) {
+                const node = stack.pop();
+                nodes.push(node);
+
+                node.connectedEdges().forEach(edge => {
+                    const other = edge.source().id() === node.id()
+                        ? edge.target()
+                        : edge.source();
+
+                    if (remaining.delete(other.id())) {
+                        stack.push(other);
+                    }
+                });
+            }
+
+            components.push({
+                nodes: cy.collection(nodes),
+                isolated: nodes.length === 1 &&
+                    nodes[0].connectedEdges().length === 0,
+            });
+        }
+
+        return components;
+    }
+
+    // Initialize each component using a compact grid-like arrangement.
+    // This is O(V + E), with no preliminary force simulations.
+    function initializePositions(cy) {
+        const components = findComponents(cy);
+        const connected = components
+            .filter(c => !c.isolated)
+            .sort((a, b) => b.nodes.length - a.nodes.length);
+        const isolated = components.filter(c => c.isolated);
+
+        const gap = 40;
+        const nodeGap = 34;
+        const margin = 30;
+
+        let x = margin;
+        let y = margin;
+        let rowHeight = 0;
+        let right = margin;
+        let bottom = margin;
+
+        const totalNodes = connected.reduce(
+            (sum, c) => sum + c.nodes.length, 0,
+        );
+
+        const targetWidth = Math.max(
+            500,
+            Math.sqrt(totalNodes) * nodeGap * 1.8,
+        );
+
+        for (const component of connected) {
+            const nodes = component.nodes;
+            const count = nodes.length;
+
+            // Approximate footprint based on node count.
+            const columns = Math.ceil(Math.sqrt(count));
+            const rows = Math.ceil(count / columns);
+            const width = columns * nodeGap;
+            const height = rows * nodeGap;
+
+            if (x > margin && x + width > margin + targetWidth) {
+                x = margin;
+                y += rowHeight + gap;
+                rowHeight = 0;
+            }
+
+            // Put nodes into the component's own initial footprint.
+            nodes.positions((node, index) => ({
+                x: x + (index % columns) * nodeGap,
+                y: y + Math.floor(index / columns) * nodeGap,
+            }));
+
+            right = Math.max(right, x + width);
+            bottom = Math.max(bottom, y + height);
+
+            x += width + gap;
+            rowHeight = Math.max(rowHeight, height);
+        }
+
+        // Isolated nodes start in a grid below and to the right.
+        const isolatedColumns = Math.max(
+            1, Math.ceil(Math.sqrt(isolated.length)),
+        );
+        const isolatedStartX = right + gap;
+        const isolatedStartY = bottom + gap;
+
+        isolated.forEach((component, index) => {
+            component.nodes.position({
+                x: isolatedStartX +
+                    (index % isolatedColumns) * nodeGap,
+                y: isolatedStartY +
+                    Math.floor(index / isolatedColumns) * nodeGap,
+            });
+        });
+    }
+
+    function startLayout(cy, generation) {
+        if (generation !== controller.generation) return;
+
+        initializePositions(cy);
+
+        controller.layout = cy.layout(colaOptions());
+        controller.layout.run();
+        controller.running = true;
+        setButtonLabel("Pause layout");
+    }
+
+    if (
+        triggered === "layout-command" ||
+        triggered === "layout-init"
+    ) {
         if (!command || command.action !== "restart") {
             return noUpdate;
         }
 
-        cancelTimer();
-        stopLayout();
-
-        controller.manual = false;
+        cancelCurrentRun();
         controller.graphKey = command.graph_key;
 
-        const cy = window.cy;
-        if (!cy) {
-            return noUpdate;
-        }
-
-        controller.layout = cy.layout(cola_layout());
-        setButtonLabel("Pause layout");
+        const generation = controller.generation;
+        const graphKey = command.graph_key;
 
         function waitForGraph(attempt = 0) {
-            if (controller.graphKey !== command.graph_key) {
+            if (
+                generation !== controller.generation ||
+                controller.graphKey !== graphKey
+            ) {
                 return;
             }
 
             const cy = window.cy;
-
-            console.log(
-                "Edge before layout:",
-                cy.getElementById("edge-43").length,
-                "total edges:",
-                cy.edges().length
-            );
 
             if (!cy || cy.nodes().length !== command.node_count) {
                 if (attempt < 100) {
@@ -109,13 +223,7 @@ function(command, nClicks, fitClicks, initCount) {
                 return;
             }
 
-            controller.layout = cy.layout(cola_layout());
-            startLayout();
-            
-            console.log(
-                "Edge after layout:", cy.getElementById("edge-43").length,
-                "total edges:", cy.edges().length
-            );
+            startLayout(cy, generation);
         }
 
         waitForGraph();
@@ -124,22 +232,22 @@ function(command, nClicks, fitClicks, initCount) {
 
     if (triggered === "layout-toggle") {
         cancelTimer();
-        controller.manual = true;
 
         if (controller.running) {
             stopLayout();
             setButtonLabel("Play layout");
-        } else {
-            startLayout();
+        } else if (controller.layout) {
+            controller.layout.run();
+            controller.running = true;
             setButtonLabel("Pause layout");
         }
+
+        return noUpdate;
     }
 
     if (triggered === "fit-graph") {
         const cy = window.cy;
-        if (cy) {
-            cy.fit(undefined, 30);
-        }
+        if (cy) cy.fit(cy.elements(), 30);
         return noUpdate;
     }
 

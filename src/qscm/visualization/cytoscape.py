@@ -21,26 +21,35 @@ def valid_name(name: str) -> bool:
 
 def discover_items(cache_dir: Path) -> list[dict[str, str]]:
     """Discover cached graphs and graph batches."""
-    if not cache_dir.exists():
+    try:
+        paths = list(cache_dir.iterdir())
+    except (FileNotFoundError, NotADirectoryError):
         return []
 
     items = []
-    for path in cache_dir.iterdir():
+    for path in paths:
         if not valid_name(path.stem if path.is_file() else path.name):
             continue
 
         if path.is_file() and path.suffix == ".graph":
             items.append({"label": path.stem, "value": path.stem, "type": "graph"})
-        elif path.is_dir() and any(
-            child.is_file() and child.suffix == ".graph" for child in path.iterdir()
-        ):
-            items.append(
-                {
-                    "label": f"{path.name} (batch)",
-                    "value": path.name,
-                    "type": "batch",
-                }
-            )
+        elif path.is_dir():
+            try:
+                has_graphs = any(
+                    child.is_file() and child.suffix == ".graph"
+                    for child in path.iterdir()
+                )
+            except (FileNotFoundError, NotADirectoryError):
+                continue
+
+            if has_graphs:
+                items.append(
+                    {
+                        "label": f"{path.name} (batch)",
+                        "value": path.name,
+                        "type": "batch",
+                    }
+                )
 
     return sorted(items, key=lambda item: item["label"].lower())
 

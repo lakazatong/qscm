@@ -191,7 +191,7 @@ def graph_main(args: argparse.Namespace) -> int:
         )
         graph = generator.generate(args.node_count, model=args.model, base=base)
 
-    output_path = Path(f"{graph.graph['name']}.graph")
+    output_path = Path(CACHE_DIR) / f"{graph.graph['name']}.graph"
 
     if output_path.exists() and not args.force:
         raise FileExistsError(
@@ -295,7 +295,10 @@ def register_graph_parser(commands) -> None:
             help="Seed for random parameter sampling.",
         )
         p.add_argument(
-            "--force", action="store_true", help="Overwrite an existing graph file."
+            "-f",
+            "--force",
+            action="store_true",
+            help="Overwrite an existing graph file.",
         )
 
     for model in DEFAULT_MODELS:
