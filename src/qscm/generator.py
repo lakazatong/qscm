@@ -1,52 +1,109 @@
 import random
+from abc import ABC, abstractmethod
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass, field
 
 import networkx as nx
 
+
+@dataclass(frozen=True)
+class Regime(ABC):
+    description: str
+
+    @abstractmethod
+    def format(self) -> str:
+        """Human-readable definition of this regime."""
+
+
+@dataclass(frozen=True)
+class RangeRegime(Regime):
+    values: tuple[float, float]
+
+    def format(self) -> str:
+        return f"[{self.values[0]}, {self.values[1]}]"
+
+
+@dataclass(frozen=True)
+class ChoicesRegime(Regime):
+    values: tuple[int, ...]
+
+    def format(self) -> str:
+        return "{" + ", ".join(map(str, self.values)) + "}"
+
+
+@dataclass(frozen=True)
+class StochasticBlockRegime(Regime):
+    p_in: tuple[float, float]
+    p_out: tuple[float, float] | None = None
+    p_out_ratio: tuple[float, float] | None = None
+
+    def format(self) -> str:
+        parts = [f"p_in ∈ {self.p_in}"]
+        if self.p_out is not None:
+            parts.append(f"p_out ∈ {self.p_out}")
+        if self.p_out_ratio is not None:
+            parts.append(f"p_out/p_in ∈ {self.p_out_ratio}")
+        return ", ".join(parts)
+
+
 DEGREE_REGIMES = {
-    "subcritical": (0.5, 0.9),
-    "critical": (0.9, 1.1),
-    "supercritical": (1.1, 2.0),
-    "sparse": (2.0, 4.0),
+    "subcritical": RangeRegime("Expected degree below 1.", (0.5, 0.9)),
+    "critical": RangeRegime("Expected degree around 1.", (0.9, 1.1)),
+    "supercritical": RangeRegime("Expected degree above 1.", (1.1, 2.0)),
+    "sparse": RangeRegime("Relatively sparse graphs.", (2.0, 4.0)),
 }
 
 REGIMES = {
-    # Expected in-degree and out-degree: E[d] = p * (n - 1).
-    # Heuristic sparsity ranges, not phase-transition thresholds.
     "erdos_renyi": DEGREE_REGIMES,
-    # Target mean out-degree: m / n.
-    # Heuristic sparsity ranges, not phase-transition thresholds.
     "gnm": DEGREE_REGIMES,
-    # m: number of edges each new node adds.
     "barabasi_albert": {
-        "tree_like": (1,),
-        "sparse_scale_free": (2, 3),
-        "higher_attachment": (4, 5, 6),
+        "tree_like": ChoicesRegime(
+            "Minimal attachment; produces tree-like structure.", (1,)
+        ),
+        "sparse_scale_free": ChoicesRegime(
+            "Low attachment; favors hub formation.", (2, 3)
+        ),
+        "higher_attachment": ChoicesRegime("More edges per arriving node.", (4, 5, 6)),
     },
-    # p: probability of rewiring each edge in the initial ring lattice.
     "watts_strogatz": {
-        "regular_lattice": (0.0, 0.0),
-        "small_world": (0.001, 0.1),
-        "randomized": (0.1, 1.0),
+        "regular_lattice": RangeRegime(
+            "Preserves the initial ring lattice.", (0.0, 0.0)
+        ),
+        "small_world": RangeRegime(
+            "Low rewiring; retains local structure.", (0.001, 0.1)
+        ),
+        "randomized": RangeRegime("Increasingly random connectivity.", (0.1, 1.0)),
     },
-    # d: exact degree of every node.
     "random_regular": {
-        "matching": (1,),
-        "cycles": (2,),
-        "moderate_degree": (3, 4),
-        "higher_degree": (5, 6),
+        "matching": ChoicesRegime("Every node has degree 1.", (1,)),
+        "cycles": ChoicesRegime("Every node has degree 2.", (2,)),
+        "moderate_degree": ChoicesRegime("Every node has degree 3 or 4.", (3, 4)),
+        "higher_degree": ChoicesRegime("Every node has degree 5 or 6.", (5, 6)),
     },
-    # Uniformly sampled labeled trees; no tunable regime parameter.
     "random_tree": {
-        "uniform_labeled_tree": (),
+        "uniform_labeled_tree": ChoicesRegime("Uniformly sampled labeled trees.", ()),
     },
-    # Relationship between within-block p_in and between-block p_out.
     "stochastic_block": {
-        "weak_assortative": (),  # p_in > p_out, with a modest difference.
-        "strong_assortative": (),  # p_in >> p_out.
-        "near_uniform": (),  # p_in ≈ p_out.
-        "disassortative": (),  # p_in < p_out.
+        "weak_assortative": StochasticBlockRegime(
+            "Within-block probability exceeds between-block probability modestly.",
+            p_in=(0.15, 0.4),
+            p_out_ratio=(0.4, 0.7),
+        ),
+        "strong_assortative": StochasticBlockRegime(
+            "Within-block probability greatly exceeds between-block probability.",
+            p_in=(0.35, 0.7),
+            p_out=(0.01, 0.08),
+        ),
+        "near_uniform": StochasticBlockRegime(
+            "Within-block and between-block probabilities are similar.",
+            p_in=(0.05, 0.6),
+            p_out_ratio=(0.9, 1.1),
+        ),
+        "disassortative": StochasticBlockRegime(
+            "Between-block probability exceeds within-block probability.",
+            p_in=(0.01, 0.08),
+            p_out=(0.2, 0.5),
+        ),
     },
 }
 
@@ -108,12 +165,13 @@ def graph_filename(model: str, regime: str, nx_arguments: Mapping) -> str:
     return "_".join(format_value(value) for value in parts)
 
 
-def _degree_regimes(n: int) -> list[tuple[str, float, float]]:
+def _degree_regimes(model: str, n: int) -> list[tuple[str, float, float]]:
     max_degree = n - 1
     return [
-        (name, low, min(high, max_degree))
-        for name, (low, high) in DEGREE_REGIMES.items()
-        if low < min(high, max_degree)
+        (name, regime.values[0], min(regime.values[1], max_degree))
+        for name, regime in REGIMES[model].items()
+        if isinstance(regime, RangeRegime)
+        and regime.values[0] < min(regime.values[1], max_degree)
     ]
 
 
@@ -132,18 +190,19 @@ def _seed(rng: random.Random, base: "SampledModel | None") -> int:
 
 
 def _choose_degree_regime(
-    n: int, rng: random.Random, base: "SampledModel | None"
+    model: str, n: int, rng: random.Random, base: SampledModel | None
 ) -> tuple[str, float, float]:
+    regimes = REGIMES[model]
+    available = {name: (low, high) for name, low, high in _degree_regimes(model, n)}
+
     requested = _override(base, "parameters", "regime", None)
-    available = {name: (low, high) for name, low, high in _degree_regimes(n)}
 
     if requested is None:
         name = rng.choice(list(available))
     else:
-        if requested not in DEGREE_REGIMES:
+        if requested not in regimes:
             raise ValueError(
-                f"Unknown degree regime {requested!r}; "
-                f"choose from {tuple(DEGREE_REGIMES)}."
+                f"Unknown {model} regime {requested!r}; choose from {tuple(regimes)}."
             )
         if requested not in available:
             raise ValueError(f"Regime {requested!r} is unavailable for n={n}.")
@@ -173,7 +232,7 @@ def _sample_erdos_renyi(
 ) -> SampledModel:
     nx_seed = _seed(rng, base)
 
-    regime, low, high = _choose_degree_regime(n, rng, base)
+    regime, low, high = _choose_degree_regime("erdos_renyi", n, rng, base)
 
     expected_degree = _override(base, "parameters", "expected_in_out_degree", None)
     p = _override(base, "args", "p", None)
@@ -202,7 +261,7 @@ def _sample_gnm(
 ) -> SampledModel:
     nx_seed = _seed(rng, base)
 
-    regime, low, high = _choose_degree_regime(n, rng, base)
+    regime, low, high = _choose_degree_regime("gnm", n, rng, base)
 
     target_mean_out = _override(base, "parameters", "target_mean_out", None)
     m = _override(base, "args", "m", None)
@@ -234,10 +293,10 @@ def _sample_barabasi_albert(
         base, "postprocess_kwargs", "seed", rng.randrange(2**32)
     )
 
-    max_m = min(6, n - 1)
     available = {
-        name: tuple(m for m in values if m <= max_m)
-        for name, values in REGIMES["barabasi_albert"].items()
+        name: regime.values
+        for name, regime in REGIMES["barabasi_albert"].items()
+        if isinstance(regime, ChoicesRegime)
     }
     available = {name: values for name, values in available.items() if values}
 
@@ -292,7 +351,7 @@ def _sample_watts_strogatz(
     if regime is not None:
         if regime not in REGIMES["watts_strogatz"]:
             raise ValueError(f"Unknown Watts–Strogatz regime {regime!r}.")
-        low, high = REGIMES["watts_strogatz"][regime]
+        low, high = REGIMES["watts_strogatz"][regime].values
     else:
         low, high = 0.0, 1.0
 
@@ -305,8 +364,9 @@ def _sample_watts_strogatz(
         regime = next(
             (
                 name
-                for name, (r_low, r_high) in REGIMES["watts_strogatz"].items()
-                if r_low <= p <= r_high
+                for name, definition in REGIMES["watts_strogatz"].items()
+                if definition.values[0] <= p < definition.values[1]
+                or (p == 1.0 and definition.values[1] == 1.0)
             ),
             "custom",
         )
@@ -334,8 +394,9 @@ def _sample_random_regular(
 
     possible_d = [d for d in range(1, min(6, n - 1) + 1) if n * d % 2 == 0]
     available = {
-        name: tuple(d for d in values if d in possible_d)
-        for name, values in REGIMES["random_regular"].items()
+        name: tuple(d for d in regime.values if d in possible_d)
+        for name, regime in REGIMES["random_regular"].items()
+        if isinstance(regime, ChoicesRegime)
     }
     available = {name: values for name, values in available.items() if values}
 
@@ -414,18 +475,15 @@ def _sample_stochastic_block(
     if not 2 <= count <= n:
         raise ValueError("Stochastic-block count must satisfy 2 <= count <= n.")
 
-    if regime == "weak_assortative":
-        default_p_in = rng.uniform(0.15, 0.4)
-        default_p_out = default_p_in * rng.uniform(0.4, 0.7)
-    elif regime == "strong_assortative":
-        default_p_in = rng.uniform(0.35, 0.7)
-        default_p_out = rng.uniform(0.01, 0.08)
-    elif regime == "near_uniform":
-        default_p_in = rng.uniform(0.05, 0.6)
-        default_p_out = default_p_in * rng.uniform(0.9, 1.1)
+    definition = REGIMES["stochastic_block"][regime]
+    assert isinstance(definition, StochasticBlockRegime)
+
+    default_p_in = rng.uniform(*definition.p_in)
+    if definition.p_out is not None:
+        default_p_out = rng.uniform(*definition.p_out)
     else:
-        default_p_in = rng.uniform(0.01, 0.08)
-        default_p_out = rng.uniform(0.2, 0.5)
+        assert definition.p_out_ratio is not None
+        default_p_out = default_p_in * rng.uniform(*definition.p_out_ratio)
 
     p_in = _override(base, "parameters", "p_in", default_p_in)
     p_out = _override(base, "parameters", "p_out", default_p_out)

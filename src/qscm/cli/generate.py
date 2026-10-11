@@ -22,6 +22,13 @@ _SAMPLE_GROUPS = (
 )
 
 
+def format_regime_help(model: str) -> str:
+    return "\n".join(
+        f"  {name:<22} {regime.format():<32} {regime.description}"
+        for name, regime in REGIMES[model].items()
+    )
+
+
 def clear_cache(args: Namespace) -> int:
     path = Path(CACHE_DIR)
 
@@ -101,7 +108,6 @@ def _discover_fields(model: str):
 def _add_model_options(parser: argparse.ArgumentParser, model: str) -> None:
     """Add only the options supported by the selected model."""
     fields = _discover_fields(model)
-    regime_names = sorted(REGIMES.get(model, {}))
 
     for (group_name, name), default in fields.items():
         option = _option_name(group_name, name)
@@ -109,9 +115,12 @@ def _add_model_options(parser: argparse.ArgumentParser, model: str) -> None:
         if group_name == "parameters" and name == "regime":
             parser.add_argument(
                 option,
-                choices=regime_names,
-                default=None,
-                help="Select a model regime",
+                choices=sorted(REGIMES[model]),
+            )
+            parser.add_argument(
+                "--list-regimes",
+                action="store_true",
+                help="List available regimes for this graph model and exit.",
             )
             continue
 
@@ -177,6 +186,13 @@ def _make_base(args: argparse.Namespace, node_count: int) -> SampledModel:
 
 
 def graph_main(args: argparse.Namespace) -> int:
+    if args.list_regimes:
+        print(format_regime_help(args.model))
+        return 0
+
+    if args.node_count is None:
+        raise ValueError("node_count is required unless --list-regimes is used.")
+
     if args.model is None:
         generator = RandomGraphGenerator(seed=args.rng_seed)
         graph = generator.generate(args.node_count)
@@ -203,6 +219,10 @@ def graph_main(args: argparse.Namespace) -> int:
 
 
 def batch_main(args: Namespace) -> int:
+    if args.list_regimes:
+        print(format_regime_help(args.model))
+        return 0
+
     if args.count < 1:
         raise ValueError("Graph count must be at least 1.")
 
@@ -284,7 +304,12 @@ def register_graph_parser(commands) -> None:
     subparsers = parser.add_subparsers(dest="model_command", required=True)
 
     def add_common_options(p):
-        p.add_argument("node_count", type=int, help="Number of nodes.")
+        p.add_argument(
+            "node_count",
+            nargs="?",
+            type=int,
+            help="Number of nodes.",
+        )
         p.add_argument(
             "--rng-seed",
             type=int,
@@ -299,7 +324,7 @@ def register_graph_parser(commands) -> None:
         )
 
     for model in DEFAULT_MODELS:
-        model_parser = subparsers.add_parser(model, help=f"Generate using {model}.")
+        model_parser = subparsers.add_parser(model)
         add_common_options(model_parser)
         _add_model_options(model_parser, model)
         model_parser.set_defaults(func=graph_main, model=model)
@@ -346,7 +371,7 @@ def register_batch_parser(commands) -> None:
         )
 
     for model in DEFAULT_MODELS:
-        model_parser = subparsers.add_parser(model, help=f"Generate using {model}.")
+        model_parser = subparsers.add_parser(model)
         add_common_options(model_parser)
         _add_model_options(model_parser, model)
         model_parser.set_defaults(func=batch_main, model=model)
