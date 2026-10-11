@@ -12,32 +12,41 @@ DEGREE_REGIMES = {
 }
 
 REGIMES = {
+    # Expected in-degree and out-degree: E[d] = p * (n - 1).
+    # Heuristic sparsity ranges, not phase-transition thresholds.
     "erdos_renyi": DEGREE_REGIMES,
+    # Target mean out-degree: m / n.
+    # Heuristic sparsity ranges, not phase-transition thresholds.
     "gnm": DEGREE_REGIMES,
+    # m: number of edges each new node adds.
     "barabasi_albert": {
         "tree_like": (1,),
         "sparse_scale_free": (2, 3),
         "higher_attachment": (4, 5, 6),
     },
+    # p: probability of rewiring each edge in the initial ring lattice.
     "watts_strogatz": {
         "regular_lattice": (0.0, 0.0),
         "small_world": (0.001, 0.1),
         "randomized": (0.1, 1.0),
     },
+    # d: exact degree of every node.
     "random_regular": {
         "matching": (1,),
         "cycles": (2,),
         "moderate_degree": (3, 4),
         "higher_degree": (5, 6),
     },
+    # Uniformly sampled labeled trees; no tunable regime parameter.
     "random_tree": {
         "uniform_labeled_tree": (),
     },
+    # Relationship between within-block p_in and between-block p_out.
     "stochastic_block": {
-        "weak_assortative": (),
-        "strong_assortative": (),
-        "near_uniform": (),
-        "disassortative": (),
+        "weak_assortative": (),  # p_in > p_out, with a modest difference.
+        "strong_assortative": (),  # p_in >> p_out.
+        "near_uniform": (),  # p_in ≈ p_out.
+        "disassortative": (),  # p_in < p_out.
     },
 }
 
