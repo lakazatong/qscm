@@ -234,7 +234,23 @@ def graph_fingerprint(G: nx.DiGraph) -> Fingerprint:
     }
 
 
-# --- Fingerprint cropping ---
+# --- Fingerprint post-processing ---
+
+
+VECTOR_BOUNDS: dict[str, tuple[int, int]] = {
+    "in_degree": (0, 20),
+    "out_degree": (0, 20),
+    "depth": (0, 50),
+    "height": (0, 50),
+    "divergence": (0, 500),
+    "convergence": (0, 500),
+    "upstream_impact": (0, 100),
+    "downstream_impact": (0, 100),
+    "pair_impact": (0, 1000),
+    "cycle_length": (1, 50),
+    "node_cycle_participation": (0, 1000),
+    "cycle_span": (0, 50),
+}
 
 
 def crop_fingerprint(
@@ -248,11 +264,11 @@ def crop_fingerprint(
 
     bounds maps histogram names to (minimum, maximum), inclusive.
 
-    If discard=True, out-of-range bins are removed and the remaining
-    probabilities renormalized.
-
+    If discard=True, out-of-range bins are removed.
     If discard=False, out-of-range probability mass is accumulated
     into the nearest boundary bin.
+
+    Histograms are not normalized.
     """
     result = {}
 
@@ -266,7 +282,7 @@ def crop_fingerprint(
         if minimum > maximum:
             raise ValueError(f"Invalid bounds for {name!r}: {minimum} > {maximum}")
 
-        cropped: dict[int | float, float] = {}
+        cropped: Histogram = {}
 
         for value, probability in histogram.items():
             if minimum <= value <= maximum:
@@ -278,14 +294,45 @@ def crop_fingerprint(
 
             cropped[key] = cropped.get(key, 0.0) + probability
 
-        total = sum(cropped.values())
+        result[name] = cropped
+
+    return result
+
+
+def normalize_fingerprint(fingerprint: Fingerprint) -> Fingerprint:
+    """Normalize each histogram independently."""
+    result = {}
+
+    for name, histogram in fingerprint.items():
+        total = sum(histogram.values())
         result[name] = (
-            {
-                value: probability / total
-                for value, probability in sorted(cropped.items())
-            }
+            {value: probability / total for value, probability in histogram.items()}
             if total
             else {}
         )
 
     return result
+
+
+def fingerprint_vector(
+    fingerprint: Fingerprint, bounds: Mapping[str, tuple[int, int]] = VECTOR_BOUNDS
+) -> list[float]:
+    """
+    Crop and normalize a fingerprint, then flatten it into a fixed-size vector.
+
+    Every histogram is represented by one component per integer value
+    in its inclusive bounds, in bounds insertion order.
+    """
+    cropped = crop_fingerprint(fingerprint, bounds, discard=False)
+    normalized = normalize_fingerprint(cropped)
+
+    vector = []
+
+    for name, (minimum, maximum) in bounds.items():
+        histogram = normalized.get(name, {})
+
+        vector.extend(
+            histogram.get(value, 0.0) for value in range(minimum, maximum + 1)
+        )
+
+    return vector
