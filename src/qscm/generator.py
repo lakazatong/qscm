@@ -516,6 +516,7 @@ class RandomGraphGenerator:
             )
 
         spec = self.models[model]
+        # this rng will be ignored if base contains everything this sampler needs
         model_rng = random.Random(self._rng.randrange(2**32))
         sampled = spec.sample(n, model_rng, base)
 

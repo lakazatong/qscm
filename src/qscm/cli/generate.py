@@ -106,9 +106,6 @@ def _add_model_options(parser: argparse.ArgumentParser, model: str) -> None:
     for (group_name, name), default in fields.items():
         option = _option_name(group_name, name)
 
-        if option in {"--seed", "--force", "--append"}:
-            continue
-
         if group_name == "parameters" and name == "regime":
             parser.add_argument(
                 option,
@@ -332,7 +329,7 @@ def register_batch_parser(commands) -> None:
             "--rng-seed",
             type=int,
             default=None,
-            help="Seed for random parameter sampling, including node count.",
+            help="Seed for random parameter and node count sampling.",
         )
         group = p.add_mutually_exclusive_group()
         group.add_argument(
