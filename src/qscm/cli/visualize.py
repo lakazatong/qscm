@@ -1,7 +1,7 @@
 from argparse import Namespace
 
 from qscm.config import CACHE_DIR
-from qscm.visualization import run_visualizer
+from qscm.visualization.main import run_visualizer
 
 
 def main(args: Namespace) -> int:
