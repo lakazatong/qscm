@@ -69,11 +69,7 @@ def graph_files(batch_path: Path) -> list[Path]:
     return sorted(files, key=sort_key)
 
 
-def load_graph(
-    cache_dir: Path,
-    name: str,
-    graph_name: str | None = None,
-) -> nx.Graph:
+def load_graph(cache_dir: Path, name: str, graph_name: str | None = None) -> nx.Graph:
     """Load a standalone graph or a graph within a batch."""
     if not valid_name(name):
         raise ValueError("Invalid graph or batch name.")

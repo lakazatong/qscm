@@ -1,5 +1,4 @@
-LAYOUT_CALLBACK = r"""
-function(command, nClicks, fitClicks, initCount) {
+function graph_layout(command, nClicks, fitClicks, initCount) {
     const noUpdate = window.dash_clientside.no_update;
     const triggered = window.dash_clientside.callback_context.triggered_id;
 
@@ -54,7 +53,7 @@ function(command, nClicks, fitClicks, initCount) {
             handleDisconnected: false,
             ungrabifyWhileSimulating: false,
 
-            nodeSpacing: node => {
+            nodeSpacing: (node) => {
                 switch (node.data("role")) {
                     case "feature":
                     case "target":
@@ -69,7 +68,7 @@ function(command, nClicks, fitClicks, initCount) {
     }
 
     function findComponents(cy) {
-        const remaining = new Set(cy.nodes().map(n => n.id()));
+        const remaining = new Set(cy.nodes().map((n) => n.id()));
         const components = [];
 
         while (remaining.size > 0) {
@@ -83,10 +82,8 @@ function(command, nClicks, fitClicks, initCount) {
                 const node = stack.pop();
                 nodes.push(node);
 
-                node.connectedEdges().forEach(edge => {
-                    const other = edge.source().id() === node.id()
-                        ? edge.target()
-                        : edge.source();
+                node.connectedEdges().forEach((edge) => {
+                    const other = edge.source().id() === node.id() ? edge.target() : edge.source();
 
                     if (remaining.delete(other.id())) {
                         stack.push(other);
@@ -96,8 +93,7 @@ function(command, nClicks, fitClicks, initCount) {
 
             components.push({
                 nodes: cy.collection(nodes),
-                isolated: nodes.length === 1 &&
-                    nodes[0].connectedEdges().length === 0,
+                isolated: nodes.length === 1 && nodes[0].connectedEdges().length === 0,
             });
         }
 
@@ -109,9 +105,9 @@ function(command, nClicks, fitClicks, initCount) {
     function initializePositions(cy) {
         const components = findComponents(cy);
         const connected = components
-            .filter(c => !c.isolated)
+            .filter((c) => !c.isolated)
             .sort((a, b) => b.nodes.length - a.nodes.length);
-        const isolated = components.filter(c => c.isolated);
+        const isolated = components.filter((c) => c.isolated);
 
         const gap = 40;
         const nodeGap = 34;
@@ -123,14 +119,9 @@ function(command, nClicks, fitClicks, initCount) {
         let right = margin;
         let bottom = margin;
 
-        const totalNodes = connected.reduce(
-            (sum, c) => sum + c.nodes.length, 0,
-        );
+        const totalNodes = connected.reduce((sum, c) => sum + c.nodes.length, 0);
 
-        const targetWidth = Math.max(
-            500,
-            Math.sqrt(totalNodes) * nodeGap * 1.8,
-        );
+        const targetWidth = Math.max(500, Math.sqrt(totalNodes) * nodeGap * 1.8);
 
         for (const component of connected) {
             const nodes = component.nodes;
@@ -162,18 +153,14 @@ function(command, nClicks, fitClicks, initCount) {
         }
 
         // Isolated nodes start in a grid below and to the right.
-        const isolatedColumns = Math.max(
-            1, Math.ceil(Math.sqrt(isolated.length)),
-        );
+        const isolatedColumns = Math.max(1, Math.ceil(Math.sqrt(isolated.length)));
         const isolatedStartX = right + gap;
         const isolatedStartY = bottom + gap;
 
         isolated.forEach((component, index) => {
             component.nodes.position({
-                x: isolatedStartX +
-                    (index % isolatedColumns) * nodeGap,
-                y: isolatedStartY +
-                    Math.floor(index / isolatedColumns) * nodeGap,
+                x: isolatedStartX + (index % isolatedColumns) * nodeGap,
+                y: isolatedStartY + Math.floor(index / isolatedColumns) * nodeGap,
             });
         });
     }
@@ -189,10 +176,7 @@ function(command, nClicks, fitClicks, initCount) {
         setButtonLabel("Pause layout");
     }
 
-    if (
-        triggered === "layout-command" ||
-        triggered === "layout-init"
-    ) {
+    if (triggered === "layout-command" || triggered === "layout-init") {
         if (!command || command.action !== "restart") {
             return noUpdate;
         }
@@ -204,10 +188,7 @@ function(command, nClicks, fitClicks, initCount) {
         const graphKey = command.graph_key;
 
         function waitForGraph(attempt = 0) {
-            if (
-                generation !== controller.generation ||
-                controller.graphKey !== graphKey
-            ) {
+            if (generation !== controller.generation || controller.graphKey !== graphKey) {
                 return;
             }
 
@@ -253,4 +234,3 @@ function(command, nClicks, fitClicks, initCount) {
 
     return noUpdate;
 }
-"""

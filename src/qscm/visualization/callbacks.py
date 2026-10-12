@@ -1,12 +1,14 @@
 import os
 import pickle
 import random
+from math import inf
 from pathlib import Path
 from threading import Event, Timer
 
 import dash
-from dash import Input, Output, State, ctx
+from dash import Input, Output, State, ctx, html
 
+from qscm.fingerprint import graph_fingerprint, require_digraph
 from qscm.visualization.cytoscape import (
     discover_items,
     graph_elements,
@@ -14,10 +16,24 @@ from qscm.visualization.cytoscape import (
     graph_status,
     load_graph,
 )
-from qscm.visualization.layout_js import LAYOUT_CALLBACK
+
+from .js_callbacks import GRAPH_LAYOUT_CALLBACK
 
 
 def register_callbacks(app: dash.Dash, cache_dir: Path) -> None:
+    @app.callback(
+        Output("metadata-panel", "style"),
+        Output("toggle-metadata", "children"),
+        Input("toggle-metadata", "n_clicks"),
+        State("metadata-panel", "style"),
+    )
+    def toggle_metadata(n_clicks, style):
+        visible = (n_clicks or 0) % 2 == 0
+        return (
+            {**style, "display": "block" if visible else "none"},
+            "Hide metadata" if visible else "Show metadata",
+        )
+
     @app.callback(
         Output("item-selector", "value"),
         Input("prev-item", "n_clicks"),
@@ -198,7 +214,7 @@ def register_callbacks(app: dash.Dash, cache_dir: Path) -> None:
         )
 
     app.clientside_callback(
-        LAYOUT_CALLBACK,
+        GRAPH_LAYOUT_CALLBACK,
         Output("layout-command-result", "data"),
         Input("layout-command", "data"),
         Input("layout-toggle", "n_clicks"),
@@ -222,6 +238,90 @@ def register_callbacks(app: dash.Dash, cache_dir: Path) -> None:
             value = current_items[0]["value"] if current_items else None
 
         return current_items, value
+
+    @app.callback(
+        Output("fingerprint-content", "children"),
+        Input("toggle-fingerprints", "n_clicks"),
+        State("item-selector", "value"),
+        State("graph-selector", "value"),
+        prevent_initial_call=True,
+    )
+    def update_fingerprints(n_clicks, name, graph_name):
+        if not n_clicks:
+            return dash.no_update
+
+        if name is None:
+            return "Select a graph first."
+
+        fingerprints = None
+
+        try:
+            graph = load_graph(cache_dir, name, graph_name)
+            if require_digraph(graph):
+                fingerprints = graph_fingerprint(graph)
+        except (OSError, ValueError, TypeError, pickle.UnpicklingError) as exc:
+            return f"Could not compute fingerprints: {exc}"
+
+        assert fingerprints is not None
+
+        cards = []
+        for fingerprint_name, histogram in fingerprints.items():
+            maximum = max(histogram.values(), default=0)
+
+            bars = [
+                html.Div(
+                    title=f"{'∞' if value == inf else value}: {probability:.4f}",
+                    style={
+                        "height": f"{0 if maximum == 0 else probability / maximum * 110}px",
+                        "flex": "1",
+                        "background": "#4C78A8",
+                        "borderRadius": "3px 3px 0 0",
+                    },
+                )
+                for value, probability in sorted(histogram.items())
+            ]
+
+            cards.append(
+                html.Div(
+                    [
+                        html.Strong(fingerprint_name),
+                        html.Div(
+                            bars,
+                            style={
+                                "height": "130px",
+                                "display": "flex",
+                                "alignItems": "flex-end",
+                                "gap": "5px",
+                                "padding": "12px 0",
+                            },
+                        ),
+                        html.Div(
+                            f"{len(histogram)} bins · normalized distribution",
+                            style={"fontSize": "12px", "color": "#6B7280"},
+                        ),
+                    ],
+                    style={
+                        "padding": "14px",
+                        "border": "1px solid #D1D5DB",
+                        "borderRadius": "8px",
+                        "background": "#FFFFFF",
+                        "minWidth": 0,
+                    },
+                )
+            )
+
+        return html.Div(
+            cards,
+            style={
+                "display": "grid",
+                "gridTemplateColumns": "repeat(auto-fit, minmax(260px, 1fr))",
+                "alignContent": "start",
+                "gap": "12px",
+                "padding": "12px",
+            },
+        )
+
+    # watchdog
 
     changes_detected = Event()
     refresh_timer: Timer | None = None

@@ -28,6 +28,12 @@ def create_layout(
                 [
                     html.Div(
                         [
+                            html.Button(
+                                "Hide metadata",
+                                id="toggle-metadata",
+                                n_clicks=0,
+                                title="Show or hide graph metadata",
+                            ),
                             dcc.Dropdown(
                                 id="item-selector",
                                 options=items,
@@ -96,6 +102,9 @@ def create_layout(
                                 data=initial_layout_command,
                             ),
                             dcc.Store(id="layout-command-result"),
+                            html.Button(
+                                "Fingerprints", id="toggle-fingerprints", n_clicks=0
+                            ),
                         ],
                         style={
                             "display": "flex",
@@ -105,13 +114,60 @@ def create_layout(
                             "maxWidth": "calc(100vw - 24px)",
                         },
                     ),
+                    # html.Div(
+                    #     id="graph-status",
+                    #     children=initial_status,
+                    #     style={
+                    #         "fontSize": "12px",
+                    #         "color": "#555",
+                    #         "whiteSpace": "pre-line",
+                    #     },
+                    # ),
+                    # html.Div(
+                    #     [
+                    #         html.Button(
+                    #             "Hide metadata",
+                    #             id="toggle-metadata",
+                    #             n_clicks=0,
+                    #         ),
+                    #         html.Div(
+                    #             initial_status,
+                    #             id="graph-status",
+                    #             style={
+                    #                 "fontSize": "12px",
+                    #                 "color": "#374151",
+                    #                 "whiteSpace": "pre-line",
+                    #             },
+                    #         ),
+                    #     ],
+                    #     id="metadata-panel",
+                    #     style={
+                    #         "background": "rgba(255, 255, 255, 0.95)",
+                    #         "border": "1px solid #D1D5DB",
+                    #         "borderRadius": "6px",
+                    #         "padding": "8px 10px",
+                    #         "boxShadow": "0 1px 4px rgba(0, 0, 0, 0.12)",
+                    #         "maxWidth": "min(520px, calc(100vw - 24px))",
+                    #     },
+                    # ),
                     html.Div(
-                        id="graph-status",
-                        children=initial_status,
+                        html.Div(
+                            initial_status,
+                            id="graph-status",
+                            style={
+                                "fontSize": "12px",
+                                "color": "#374151",
+                                "whiteSpace": "pre-line",
+                            },
+                        ),
+                        id="metadata-panel",
                         style={
-                            "fontSize": "12px",
-                            "color": "#555",
-                            "whiteSpace": "pre-line",
+                            "background": "rgba(255, 255, 255, 0.95)",
+                            "border": "1px solid #D1D5DB",
+                            "borderRadius": "6px",
+                            "padding": "8px 10px",
+                            "boxShadow": "0 1px 4px rgba(0, 0, 0, 0.12)",
+                            "maxWidth": "min(520px, calc(100vw - 24px))",
                         },
                     ),
                 ],
@@ -127,71 +183,141 @@ def create_layout(
                     "maxWidth": "calc(100vw - 24px)",
                 },
             ),
-            cyto.Cytoscape(
-                id="graph-canvas",
-                elements=initial_elements,
-                layout={"name": "preset"},
-                stylesheet=[
-                    {
-                        "selector": "node",
-                        "style": {
-                            "label": "data(label)",
-                            "background-color": ROLE_COLORS["hidden"],
-                            "color": "#202124",
-                            "font-size": "10px",
-                            "text-valign": "top",
-                            "text-margin-y": -6,
-                            "width": 24,
-                            "height": 24,
-                            "border-width": 1,
-                            "border-color": "#FFFFFF",
+            html.Div(
+                [
+                    cyto.Cytoscape(
+                        id="graph-canvas",
+                        elements=initial_elements,
+                        layout={"name": "preset"},
+                        stylesheet=[
+                            {
+                                "selector": "node",
+                                "style": {
+                                    "label": "data(label)",
+                                    "background-color": ROLE_COLORS["hidden"],
+                                    "color": "#202124",
+                                    "font-size": "10px",
+                                    "text-valign": "top",
+                                    "text-margin-y": -6,
+                                    "width": 24,
+                                    "height": 24,
+                                    "border-width": 1,
+                                    "border-color": "#FFFFFF",
+                                },
+                            },
+                            *[
+                                {
+                                    "selector": f".{role}",
+                                    "style": {"background-color": color},
+                                }
+                                for role, color in ROLE_COLORS.items()
+                            ],
+                            {
+                                "selector": "edge",
+                                "style": {
+                                    "width": 1.5,
+                                    "line-color": "#9AA0A6",
+                                    "target-arrow-color": "#9AA0A6",
+                                    "target-arrow-shape": "triangle",
+                                    "curve-style": "bezier",
+                                },
+                            },
+                        ],
+                        minZoom=0.05,
+                        maxZoom=5,
+                        zoom=1,
+                        wheelSensitivity=0.1,
+                        pan={"x": 0, "y": 0},
+                        userZoomingEnabled=True,
+                        userPanningEnabled=True,
+                        boxSelectionEnabled=True,
+                        autoungrabify=False,
+                        style={
+                            "flex": "1 1 auto",
+                            "width": "100%",
+                            "height": "100%",
+                            "minWidth": 0,
+                            "minHeight": 0,
                         },
-                    },
-                    {
-                        "selector": ".isolated",
-                        "style": {
-                            "background-color": ROLE_COLORS["isolated"],
+                    ),
+                    html.Div(
+                        id="fingerprint-resize-handle",
+                        title="Drag to resize",
+                        style={
+                            "display": "none",
+                            "flex": "0 0 6px",
+                            "cursor": "col-resize",
+                            "background": "#D1D5DB",
+                            "zIndex": 5,
                         },
-                    },
-                    {
-                        "selector": ".feature",
-                        "style": {
-                            "background-color": ROLE_COLORS["feature"],
+                    ),
+                    html.Div(
+                        [
+                            html.Div(
+                                [
+                                    html.Strong("Fingerprints"),
+                                    html.Div(
+                                        [
+                                            html.Button(
+                                                "Expand",
+                                                id="expand-fingerprints",
+                                                n_clicks=0,
+                                            ),
+                                            html.Button(
+                                                "Close",
+                                                id="close-fingerprints",
+                                                n_clicks=0,
+                                            ),
+                                        ],
+                                        style={
+                                            "display": "flex",
+                                            "gap": "8px",
+                                        },
+                                    ),
+                                ],
+                                style={
+                                    "display": "flex",
+                                    "alignItems": "center",
+                                    "justifyContent": "space-between",
+                                    "padding": "12px",
+                                    "borderBottom": "1px solid #D1D5DB",
+                                    "flex": "0 0 auto",
+                                },
+                            ),
+                            html.Div(
+                                "Click Fingerprints to compute the graph fingerprints.",
+                                id="fingerprint-content",
+                                style={
+                                    "display": "grid",
+                                    "gridTemplateColumns": "repeat(auto-fit, minmax(260px, 1fr))",
+                                    "alignContent": "start",
+                                    "gap": "12px",
+                                    "padding": "12px",
+                                    "overflowY": "auto",
+                                },
+                            ),
+                        ],
+                        id="fingerprint-sidebar",
+                        style={
+                            "display": "none",
+                            "flex": "0 0 380px",
+                            "width": "380px",
+                            "minWidth": 0,
+                            "minHeight": 0,
+                            "flexDirection": "column",
+                            "overflow": "hidden",
+                            "background": "#F9FAFB",
+                            "borderLeft": "1px solid #D1D5DB",
                         },
-                    },
-                    {
-                        "selector": ".hidden",
-                        "style": {
-                            "background-color": ROLE_COLORS["hidden"],
-                        },
-                    },
-                    {
-                        "selector": ".target",
-                        "style": {
-                            "background-color": ROLE_COLORS["target"],
-                        },
-                    },
-                    {
-                        "selector": "edge",
-                        "style": {
-                            "width": 1.5,
-                            "line-color": "#9AA0A6",
-                            "target-arrow-color": "#9AA0A6",
-                            "target-arrow-shape": "triangle",
-                            "curve-style": "bezier",
-                        },
-                    },
+                    ),
                 ],
-                minZoom=0.05,
-                maxZoom=5,
-                zoom=1,
-                wheelSensitivity=0.1,
-                pan={"x": 0, "y": 0},
-                userZoomingEnabled=True,
-                userPanningEnabled=True,
-                boxSelectionEnabled=True,
-                autoungrabify=False,
-                style={"width": "100vw", "height": "100vh"},
+                id="visualization-workspace",
+                style={
+                    "position": "absolute",
+                    "inset": 0,
+                    "display": "flex",
+                    "overflow": "hidden",
+                },
             ),
         ],
         style={

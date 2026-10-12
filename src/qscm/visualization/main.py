@@ -63,7 +63,8 @@ def create_app(cache_dir: Path, initial_name: str | None = None) -> dash.Dash:
             "node_count": 0,
         }
 
-    app = dash.Dash(__name__)
+    app = dash.Dash(__name__, assets_folder=str(Path(__file__).parent / "assets"))
+
     app.title = "QSCM Graph Browser"
     cyto.load_extra_layouts()
 
