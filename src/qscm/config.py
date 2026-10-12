@@ -2,7 +2,7 @@ import os
 from pathlib import Path
 
 
-def _user_cache_root() -> Path:
+def _get_user_cache_dir() -> Path:
     if os.name == "nt":
         base = os.environ.get("LOCALAPPDATA")
         return Path(base) if base else Path.home() / "AppData" / "Local"
@@ -14,8 +14,8 @@ def _user_cache_root() -> Path:
 APP_TITLE = "QSCM Graph Browser"
 DASH_HOST = "127.0.0.1"
 DASH_PORT = 8050
-CACHE_DIR = _user_cache_root() / "qscm"
-ASSETS_DIR = Path(__file__) / "assets"
+CACHE_DIR = _get_user_cache_dir() / "qscm"
+ASSETS_DIR = Path(__file__).parent / "visualization" / "assets"
 
 
 def ensure_cache_dir(cache_dir=CACHE_DIR) -> Path:

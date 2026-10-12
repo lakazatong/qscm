@@ -37,7 +37,7 @@ def run_visualizer(cache_dir: Path, name: str | None = None) -> None:
     app = create_app(cache_dir, initial_name=name)
 
     threading.Timer(
-        1.0, lambda: webbrowser.open(f"http://:{DASH_HOST}:{DASH_PORT}")
+        1.0, lambda: webbrowser.open(f"http://{DASH_HOST}:{DASH_PORT}")
     ).start()
 
     app.run(host=DASH_HOST, port=DASH_PORT, debug=False)
