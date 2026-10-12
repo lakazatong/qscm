@@ -72,6 +72,8 @@ REGIMES = {
     },
 }
 
+# --- Helpers ---
+
 
 def graph_filename(model: str, regime: str, nx_arguments: Mapping) -> str:
     def format_value(value) -> str:
@@ -124,7 +126,7 @@ def _override(base: "SampledModel | None", group: str, name: str, default):
     if base is None:
         return default
 
-    value = getattr(base, group).get(name)
+    value = (getattr(base, group) or {}).get(name)
     return default if value is None else value
 
 
@@ -169,6 +171,9 @@ def random_edge_orientation(G: nx.Graph, seed: int) -> nx.DiGraph:
             result.add_edge(v, u, **data)
 
     return result
+
+
+# --- Samplers ---
 
 
 def _sample_erdos_renyi(

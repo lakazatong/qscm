@@ -11,7 +11,6 @@ def main(args: Namespace) -> int:
 
 def register_parser(subparsers) -> None:
     parser = subparsers.add_parser(
-        "visualize",
-        help="Browse cached graphs and graph batches.",
+        "visualize", help="Browse cached graphs and graph batches."
     )
     parser.set_defaults(func=main)

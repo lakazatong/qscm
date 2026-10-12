@@ -2,6 +2,7 @@ import random
 from abc import ABC, abstractmethod
 from collections.abc import Callable, Iterable, Sequence
 from dataclasses import dataclass, field
+from typing import TypeGuard
 
 import networkx as nx
 
@@ -74,3 +75,14 @@ class ModelSpec:
     nx_function: str
     sample: Sampler
     postprocess: Callable[..., nx.DiGraph] | None = None
+
+
+# Misc
+
+
+def require_digraph(G: nx.Graph) -> TypeGuard[nx.DiGraph]:
+    if not G.is_directed():
+        raise TypeError("Expected a directed graph.")
+    if G.is_multigraph():
+        raise TypeError("MultiDiGraph is not supported.")
+    return isinstance(G, nx.DiGraph)

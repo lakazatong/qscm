@@ -2,25 +2,23 @@ import os
 from pathlib import Path
 
 
-def _get_user_cache_dir() -> Path:
+def _user_cache_root() -> Path:
     if os.name == "nt":
         base = os.environ.get("LOCALAPPDATA")
-        if base:
-            return Path(base)
-
-        return Path.home() / "AppData" / "Local"
+        return Path(base) if base else Path.home() / "AppData" / "Local"
 
     base = os.environ.get("XDG_CACHE_HOME")
-    if base:
-        return Path(base)
-
-    return Path.home() / ".cache"
+    return Path(base) if base else Path.home() / ".cache"
 
 
-PACKAGE_ROOT = Path(".").parent
-SRC_DIR = PACKAGE_ROOT.parent
-REPO_ROOT = SRC_DIR.parent
+APP_TITLE = "QSCM Graph Browser"
+DASH_HOST = "127.0.0.1"
+DASH_PORT = 8050
+CACHE_DIR = _user_cache_root() / "qscm"
+ASSETS_DIR = Path(__file__) / "assets"
 
-USER_CACHE_DIR = _get_user_cache_dir()
-CACHE_DIR = USER_CACHE_DIR / "qscm"
-CACHE_DIR.mkdir(parents=True, exist_ok=True)
+
+def ensure_cache_dir(cache_dir=CACHE_DIR) -> Path:
+    """Create the cache directory on demand (not as an import side effect)."""
+    cache_dir.mkdir(parents=True, exist_ok=True)
+    return cache_dir

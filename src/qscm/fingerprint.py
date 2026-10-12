@@ -3,7 +3,6 @@
 from collections import Counter
 from collections.abc import Mapping
 from math import inf
-from typing import TypeGuard
 
 import networkx as nx
 
@@ -19,14 +18,6 @@ def _histogram(values) -> Histogram:
         return {}
 
     return {value: count / total for value, count in sorted(counts.items())}
-
-
-def require_digraph(G: nx.Graph) -> TypeGuard[nx.DiGraph]:
-    if not G.is_directed():
-        raise TypeError("Expected a directed graph.")
-    if G.is_multigraph():
-        raise TypeError("MultiDiGraph is not supported.")
-    return isinstance(G, nx.DiGraph)
 
 
 # --- Connectivity ---

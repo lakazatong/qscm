@@ -1,12 +1,12 @@
 import argparse
 import json
-import pickle
 
 import numpy as np
 from scipy.linalg import helmert
 
+from qscm.cache import graph_files, read_graph, valid_name
 from qscm.config import CACHE_DIR
-from qscm.data import Vector
+from qscm.data import Vector, require_digraph
 from qscm.fingerprint import VECTOR_BOUNDS, fingerprint_vectors, graph_fingerprint
 from qscm.geometry import barycenter, distance_statistics, hypervolume
 
@@ -14,28 +14,23 @@ from qscm.geometry import barycenter, distance_statistics, hypervolume
 def geometry(args: argparse.Namespace) -> None:
     batch_path = CACHE_DIR / args.batch_name
 
-    if not batch_path.is_dir():
+    if not valid_name(args.batch_name) or not batch_path.is_dir():
         raise SystemExit(f"Batch not found: {batch_path}")
 
-    graph_paths = sorted(
-        batch_path.glob("*.graph"),
-        key=lambda path: int(path.stem) if path.stem.isdigit() else path.name,
-    )
+    paths = graph_files(batch_path)
 
-    if not graph_paths:
+    if not paths:
         raise SystemExit(f"No graph files found in {batch_path}")
 
     histograms: dict[str, list[Vector]] = {name: [] for name in VECTOR_BOUNDS}
 
-    for path in graph_paths:
-        with path.open("rb") as file:
-            graph = pickle.load(file)
+    for path in paths:
+        graph = read_graph(path)
+        if require_digraph(graph):
+            vectors = fingerprint_vectors(graph_fingerprint(graph))
 
-        fingerprint = graph_fingerprint(graph)
-        vectors = fingerprint_vectors(fingerprint)
-
-        for name, vector in zip(VECTOR_BOUNDS, vectors, strict=True):
-            histograms[name].append(vector)
+            for name, vector in zip(VECTOR_BOUNDS, vectors, strict=True):
+                histograms[name].append(vector)
 
     results = {}
 
@@ -69,7 +64,7 @@ def geometry(args: argparse.Namespace) -> None:
         json.dumps(
             {
                 "batch": args.batch_name,
-                "graphs": len(graph_paths),
+                "graphs": len(paths),
                 "histograms": results,
             },
             indent=2,

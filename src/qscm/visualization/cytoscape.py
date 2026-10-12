@@ -1,11 +1,10 @@
-import pickle
-import re
-from pathlib import Path
+"""Conversion of NetworkX graphs into data for the Cytoscape canvas."""
+
 from typing import Any
 
 import networkx as nx
 
-_NAME_PATTERN = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]*")
+from qscm.data import require_digraph
 
 ROLE_COLORS = {
     "isolated": "#4CA866",
@@ -14,118 +13,62 @@ ROLE_COLORS = {
     "target": "#E45756",
 }
 
-
-def valid_name(name: str) -> bool:
-    return bool(_NAME_PATTERN.fullmatch(name)) and name not in {".", ".."}
-
-
-def discover_items(cache_dir: Path) -> list[dict[str, str]]:
-    """Discover cached graphs and graph batches."""
-    try:
-        paths = list(cache_dir.iterdir())
-    except (FileNotFoundError, NotADirectoryError):
-        return []
-
-    items = []
-    for path in paths:
-        if not valid_name(path.stem if path.is_file() else path.name):
-            continue
-
-        if path.is_file() and path.suffix == ".graph":
-            items.append({"label": path.stem, "value": path.stem, "type": "graph"})
-        elif path.is_dir():
-            try:
-                has_graphs = any(
-                    child.is_file() and child.suffix == ".graph"
-                    for child in path.iterdir()
-                )
-            except (FileNotFoundError, NotADirectoryError):
-                continue
-
-            if has_graphs:
-                items.append(
-                    {
-                        "label": f"{path.name} (batch)",
-                        "value": path.name,
-                        "type": "batch",
-                    }
-                )
-
-    return sorted(items, key=lambda item: item["label"].lower())
+STYLESHEET: list[dict[str, Any]] = [
+    {
+        "selector": "node",
+        "style": {
+            "label": "data(label)",
+            "background-color": ROLE_COLORS["hidden"],
+            "color": "#202124",
+            "font-size": "10px",
+            "text-valign": "top",
+            "text-margin-y": -6,
+            "width": 24,
+            "height": 24,
+            "border-width": 1,
+            "border-color": "#FFFFFF",
+        },
+    },
+    *[
+        {"selector": f".{role}", "style": {"background-color": color}}
+        for role, color in ROLE_COLORS.items()
+    ],
+    {
+        "selector": "edge",
+        "style": {
+            "width": 1.5,
+            "line-color": "#9AA0A6",
+            "target-arrow-color": "#9AA0A6",
+            "target-arrow-shape": "triangle",
+            "curve-style": "bezier",
+        },
+    },
+]
 
 
-def graph_files(batch_path: Path) -> list[Path]:
-    """Return batch graphs in numeric order where possible."""
-    files = [
-        path
-        for path in batch_path.iterdir()
-        if path.is_file() and path.suffix == ".graph"
-    ]
+def node_role(graph: nx.Graph, node: Any) -> str:
+    if graph.degree(node) == 0:
+        return "isolated"
 
-    def sort_key(path: Path) -> tuple[int, int | str]:
-        stem = path.stem
-        return (0, int(stem)) if stem.isdigit() else (1, stem.lower())
+    if not graph.is_directed():
+        return "feature" if graph.degree(node) == 1 else "hidden"
 
-    return sorted(files, key=sort_key)
+    if require_digraph(graph):
+        if graph.in_degree(node) == 0:
+            return "feature"
+        if graph.out_degree(node) == 0:
+            return "target"
+        return "hidden"
 
-
-def load_graph(cache_dir: Path, name: str, graph_name: str | None = None) -> nx.Graph:
-    """Load a standalone graph or a graph within a batch."""
-    if not valid_name(name):
-        raise ValueError("Invalid graph or batch name.")
-
-    if graph_name is not None:
-        if not valid_name(graph_name):
-            raise ValueError("Invalid graph name.")
-        path = cache_dir / name / f"{graph_name}.graph"
-    else:
-        path = cache_dir / f"{name}.graph"
-        if not path.is_file():
-            batch_path = cache_dir / name
-            if not batch_path.is_dir():
-                raise FileNotFoundError(f"No graph or batch named {name!r}.")
-
-            files = graph_files(batch_path)
-            if not files:
-                raise FileNotFoundError(f"Batch {name!r} contains no graphs.")
-            path = files[0]
-
-    with path.open("rb") as file:
-        graph = pickle.load(file)
-
-    if not isinstance(graph, nx.Graph):
-        raise TypeError(f"{path} does not contain a NetworkX graph.")
-
-    return graph
+    raise RuntimeError("Impossible case")
 
 
-def graph_elements(
-    graph: nx.Graph, graph_key: str | None = None
-) -> list[dict[str, Any]]:
-    """Convert a NetworkX graph into Cytoscape elements."""
-    elements = []
+def graph_elements(graph: nx.Graph, graph_key: str) -> list[dict[str, Any]]:
+    """Convert a NetworkX graph into Cytoscape elements (nodes first)."""
+    elements: list[dict[str, Any]] = []
 
-    for node, _attributes in graph.nodes(data=True):
-        if isinstance(graph, nx.DiGraph):
-            if graph.degree(node) == 0:
-                role = "isolated"
-            elif graph.in_degree(node) == 0:
-                role = "feature"
-            elif graph.out_degree(node) == 0:
-                role = "target"
-            else:
-                role = "hidden"
-            # print(type(graph), isinstance(graph, nx.DiGraph))
-            # print("node:", node, "degree:", graph.degree(node))
-            # print("in:", graph.in_degree(node) if graph.is_directed() else None)
-            # print("out:", graph.out_degree(node) if graph.is_directed() else None)
-        else:
-            role = (
-                "isolated"
-                if graph.degree(node) == 0
-                else ("feature" if graph.degree(node) == 1 else "hidden")
-            )
-
+    for node in graph.nodes:
+        role = node_role(graph, node)
         elements.append(
             {
                 "data": {
@@ -154,6 +97,33 @@ def graph_elements(
         )
 
     return elements
+
+
+def graph_payload(graph: nx.Graph, graph_key: str, token: int = 0) -> dict[str, Any]:
+    """Everything the browser needs to show one graph.
+
+    The browser replaces the canvas contents with `elements` and starts the
+    layout in the same step. `token` changes on every reload so that reloading
+    an unchanged graph still reaches the browser; the counts let it verify
+    that every element made it onto the canvas.
+    """
+    return {
+        "key": graph_key,
+        "token": token,
+        "node_count": graph.number_of_nodes(),
+        "edge_count": graph.number_of_edges(),
+        "elements": graph_elements(graph, graph_key),
+    }
+
+
+def empty_payload(token: int = 0) -> dict[str, Any]:
+    return {
+        "key": "empty",
+        "token": token,
+        "node_count": 0,
+        "edge_count": 0,
+        "elements": [],
+    }
 
 
 def graph_status(graph: nx.Graph) -> str:

@@ -1,6 +1,6 @@
 import argparse
 
-from qscm.cli import compute, generate, visualize
+from .cli import compute, generate, visualize
 
 
 def main() -> int:
@@ -15,7 +15,13 @@ def main() -> int:
     compute.register_parser(subparsers)
 
     args = parser.parse_args()
-    return args.func(args)
+
+    try:
+        return args.func(args)
+    except (ValueError, FileExistsError, FileNotFoundError) as exc:
+        # User-facing problems (bad arguments, name clashes) get a message,
+        # not a traceback.
+        raise SystemExit(f"qscm: error: {exc}") from None
 
 
 if __name__ == "__main__":
