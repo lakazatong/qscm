@@ -356,24 +356,6 @@ def register_batch_parser(commands) -> None:
     _add_model_subparsers(subparsers, _add_batch_options, batch_main)
 
 
-def register_cache_parser(commands) -> None:
-    parser = commands.add_parser("cache", help="Manage the graph cache.")
-    subcommands = parser.add_subparsers(dest="cache_command", required=True)
-
-    size_parser = subcommands.add_parser(
-        "size", help="Show the combined size of cached graphs."
-    )
-    size_parser.set_defaults(func=cache_size)
-
-    clear_parser = subcommands.add_parser(
-        "clear", help="Delete cached graphs and empty directories."
-    )
-    clear_parser.add_argument(
-        "-f", "--force", action="store_true", help="Skip confirmation."
-    )
-    clear_parser.set_defaults(func=clear_cache)
-
-
 def register_parser(subparsers) -> None:
     """Register all generation-related commands under 'generate'."""
     generate_parser = subparsers.add_parser(
@@ -387,4 +369,3 @@ def register_parser(subparsers) -> None:
 
     register_graph_parser(generate_subparsers)
     register_batch_parser(generate_subparsers)
-    register_cache_parser(generate_subparsers)

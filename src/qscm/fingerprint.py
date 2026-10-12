@@ -37,7 +37,6 @@ def out_degree_histogram(G: nx.DiGraph) -> Histogram:
 def _depths_and_heights(
     G: nx.DiGraph,
 ) -> tuple[dict, dict]:
-    """Compute longest-path distances, using infinity when cycles are reachable."""
     if len(G) == 0:
         return {}, {}
 
@@ -45,7 +44,6 @@ def _depths_and_heights(
     component_of = {
         node: i for i, component in enumerate(components) for node in component
     }
-
     cyclic = {
         i
         for i, component in enumerate(components)
@@ -53,25 +51,29 @@ def _depths_and_heights(
     }
 
     condensation = nx.condensation(G, components)
-    infinite_depth = set()
-    infinite_height = set()
+    order = list(nx.topological_sort(condensation))
+    infinite_depth = set(cyclic)
+    infinite_height = set(cyclic)
 
-    for component_id in condensation:
-        descendants = nx.descendants(condensation, component_id)
-        ancestors = nx.ancestors(condensation, component_id)
+    for component in reversed(order):
+        if any(
+            successor in infinite_depth
+            for successor in condensation.successors(component)
+        ):
+            infinite_depth.add(component)
 
-        if component_id in cyclic or descendants & cyclic:
-            infinite_depth.add(component_id)
-
-        if component_id in cyclic or ancestors & cyclic:
-            infinite_height.add(component_id)
+    for component in order:
+        if any(
+            predecessor in infinite_height
+            for predecessor in condensation.predecessors(component)
+        ):
+            infinite_height.add(component)
 
     depth = {node: inf for node in G if component_of[node] in infinite_depth}
     height = {node: inf for node in G if component_of[node] in infinite_height}
 
-    finite_depth_nodes = set(G) - depth.keys()
-    finite_depth_graph = G.subgraph(finite_depth_nodes)
-    depth_order = list(nx.topological_sort(finite_depth_graph))
+    finite_depth = set(G) - depth.keys()
+    depth_order = list(nx.topological_sort(G.subgraph(finite_depth)))
 
     for node in reversed(depth_order):
         depth[node] = max(
@@ -79,9 +81,8 @@ def _depths_and_heights(
             default=0,
         )
 
-    finite_height_nodes = set(G) - height.keys()
-    finite_height_graph = G.subgraph(finite_height_nodes)
-    height_order = list(nx.topological_sort(finite_height_graph))
+    finite_height = set(G) - height.keys()
+    height_order = list(nx.topological_sort(G.subgraph(finite_height)))
 
     for node in height_order:
         height[node] = max(
@@ -205,22 +206,38 @@ def cycle_span_histogram(G: nx.DiGraph) -> Histogram:
 
 def graph_fingerprint(G: nx.DiGraph) -> Fingerprint:
     """Compute all graph fingerprint histograms."""
-
+    depth, height = _depths_and_heights(G)
+    cycles = list(nx.simple_cycles(G))
     upstream, downstream, pairs = edge_impact_histograms(G)
+
+    participation = dict.fromkeys(G.nodes, 0)
+    for cycle in cycles:
+        for node in cycle:
+            participation[node] += 1
+
+    undirected = G.to_undirected()
+    spans = []
+
+    for cycle in cycles:
+        span = 0
+        for source in cycle:
+            distances = nx.single_source_shortest_path_length(undirected, source)
+            span = max(span, *(distances[target] for target in cycle))
+        spans.append(span)
 
     return {
         "in_degree": in_degree_histogram(G),
         "out_degree": out_degree_histogram(G),
-        "depth": depth_histogram(G),
-        "height": height_histogram(G),
-        "divergence": divergence_histogram(G),
-        "convergence": convergence_histogram(G),
+        "depth": _histogram(depth.values()),
+        "height": _histogram(height.values()),
+        "divergence": _histogram(G.out_degree(node) * depth[node] for node in G),
+        "convergence": _histogram(G.in_degree(node) * height[node] for node in G),
         "upstream_impact": upstream,
         "downstream_impact": downstream,
         "pair_impact": pairs,
-        "cycle_length": cycle_length_histogram(G),
-        "node_cycle_participation": node_cycle_participation_histogram(G),
-        "cycle_span": cycle_span_histogram(G),
+        "cycle_length": _histogram(len(cycle) for cycle in cycles),
+        "node_cycle_participation": _histogram(participation.values()),
+        "cycle_span": _histogram(spans),
     }
 
 

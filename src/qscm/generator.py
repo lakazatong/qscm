@@ -88,10 +88,7 @@ def graph_filename(model: str, regime: str, nx_arguments: Mapping) -> str:
             )
         return str(value).replace("_", "-")
 
-    parts: list[str | tuple[str, object]] = [
-        model,
-        regime,
-    ]
+    parts: list[str | tuple[str, object]] = [model, regime]
 
     for group in ("args", "kwargs"):
         for key, value in nx_arguments.get(group, {}).items():
@@ -99,14 +96,9 @@ def graph_filename(model: str, regime: str, nx_arguments: Mapping) -> str:
                 continue
 
             if key == "p" and isinstance(value, (list, tuple)):
-                # filename too long, plus the full metadata is contained within the pickled graph anyway
                 continue
 
             parts.append((key, value))
-
-    postprocessing = nx_arguments.get("postprocessing")
-    if postprocessing:
-        parts.append(("orient", postprocessing["kwargs"].get("seed")))
 
     return "_".join(format_value(value) for value in parts)
 
@@ -552,15 +544,19 @@ class RandomGraphGenerator:
             "model": model,
             "parameters": parameters,
             "nx_arguments": nx_arguments,
+            "postprocessing": [],
         }
 
         if spec.postprocess is not None:
             postprocess_kwargs = sampled.postprocess_kwargs or {}
             G = spec.postprocess(G, **postprocess_kwargs)
-            metadata["postprocessing"] = {
-                "function": spec.postprocess.__name__,
-                "kwargs": postprocess_kwargs.copy(),
-            }
+            metadata["postprocessing"].append(
+                {
+                    "function": spec.postprocess.__name__,
+                    "args": {},
+                    "kwargs": postprocess_kwargs.copy(),
+                }
+            )
 
         G.graph.clear()
         G.graph.update(metadata)

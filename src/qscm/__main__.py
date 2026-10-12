@@ -1,6 +1,6 @@
 import argparse
 
-from .cli import compute, generate, visualize
+from .cli import cache, compute, generate, visualize
 
 
 def main() -> int:
@@ -13,6 +13,7 @@ def main() -> int:
     generate.register_parser(subparsers)
     visualize.register_parser(subparsers)
     compute.register_parser(subparsers)
+    cache.register_parser(subparsers)
 
     args = parser.parse_args()
 
