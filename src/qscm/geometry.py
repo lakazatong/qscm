@@ -1,11 +1,8 @@
-from collections.abc import Iterable, Sequence
-
 import numpy as np
 import numpy.typing as npt
 from scipy.spatial import ConvexHull, QhullError
 
-Vector = Sequence[float]
-Points = Iterable[Vector]
+from .data import Points, Vector
 
 
 def _points_array(points: Points) -> npt.NDArray[np.float64]:
@@ -47,10 +44,7 @@ def barycenter(points: Points) -> npt.NDArray[np.float64]:
     return np.mean(_points_array(points), axis=0)
 
 
-def distance_statistics(
-    points: Points,
-    center: Vector,
-) -> dict[str, float]:
+def distance_statistics(points: Points, center: Vector) -> dict[str, float]:
     """Compute Euclidean distance statistics relative to a center."""
     array = _points_array(points)
     center_array = np.asarray(center, dtype=np.float64)

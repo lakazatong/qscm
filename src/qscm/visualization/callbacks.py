@@ -157,11 +157,12 @@ def register_callbacks(app: dash.Dash, cache_dir: Path) -> None:
         current_items: list[dict[str, str]],
     ):
 
-        def make_layout_command(graph_key="empty", node_count=0):
+        def make_layout_command(graph_key="empty", node_count=0, edge_count=0):
             return {
                 "action": "restart",
                 "graph_key": graph_key,
                 "node_count": node_count,
+                "edge_count": edge_count,
                 "reload_token": reload_clicks or 0,
             }
 
@@ -180,36 +181,26 @@ def register_callbacks(app: dash.Dash, cache_dir: Path) -> None:
             )
 
         selected_graph = graph_name if item["type"] == "batch" else None
+        graph_key = f"{name}:{selected_graph}"
 
         try:
             graph = load_graph(cache_dir, name, selected_graph)
-
         except (OSError, ValueError, TypeError, pickle.UnpicklingError) as exc:
             return (
                 [],
                 str(exc),
-                make_layout_command(f"{name}:{selected_graph}"),
+                make_layout_command(graph_key),
             )
-        elements = graph_elements(graph)
-        # print(
-        #     "Callback output:",
-        #     "nodes =",
-        #     sum("source" not in e["data"] for e in elements),
-        #     "edges =",
-        #     sum("source" in e["data"] for e in elements),
-        #     "edge-43 =",
-        #     next(
-        #         (e for e in elements if e["data"].get("id") == "edge-43"),
-        #         None,
-        #     ),
-        # )
+
+        elements = graph_elements(graph, graph_key)
 
         return (
             elements,
             graph_status(graph),
             make_layout_command(
-                f"{name}:{selected_graph}",
+                graph_key,
                 graph.number_of_nodes(),
+                graph.number_of_edges(),
             ),
         )
 

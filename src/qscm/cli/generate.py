@@ -342,10 +342,13 @@ def register_batch_parser(commands) -> None:
     subparsers = parser.add_subparsers(dest="model_command", required=True)
 
     def add_common_options(p):
-        p.add_argument("name", help="Name used for the batch directory.")
-        p.add_argument("count", type=int, help="Number of graphs to generate.")
+        p.add_argument("name", nargs="?", help="Name used for the batch directory.")
+        p.add_argument(
+            "count", nargs="?", type=int, help="Number of graphs to generate."
+        )
         p.add_argument(
             "node_range",
+            nargs="?",
             type=parse_node_range,
             metavar="N[-M]",
             help="Node count or inclusive minimum-maximum range.",

@@ -99,7 +99,9 @@ def load_graph(cache_dir: Path, name: str, graph_name: str | None = None) -> nx.
     return graph
 
 
-def graph_elements(graph: nx.Graph) -> list[dict[str, Any]]:
+def graph_elements(
+    graph: nx.Graph, graph_key: str | None = None
+) -> list[dict[str, Any]]:
     """Convert a NetworkX graph into Cytoscape elements."""
     elements = []
 
@@ -133,6 +135,7 @@ def graph_elements(graph: nx.Graph) -> list[dict[str, Any]]:
                     "details": (
                         f"Node: {node}\nRole: {role}\nDegree: {graph.degree(node)}"
                     ),
+                    "graph_key": graph_key,
                 },
                 "classes": role,
             }
@@ -145,6 +148,7 @@ def graph_elements(graph: nx.Graph) -> list[dict[str, Any]]:
                     "id": f"edge-{index}",
                     "source": str(source),
                     "target": str(target),
+                    "graph_key": graph_key,
                 },
             }
         )

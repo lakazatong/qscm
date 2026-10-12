@@ -1,6 +1,6 @@
 import argparse
 
-from qscm.cli import generate, visualize
+from qscm.cli import compute, generate, visualize
 
 
 def main() -> int:
@@ -12,6 +12,7 @@ def main() -> int:
     subparsers = parser.add_subparsers(dest="command", required=True)
     generate.register_parser(subparsers)
     visualize.register_parser(subparsers)
+    compute.register_parser(subparsers)
 
     args = parser.parse_args()
     return args.func(args)

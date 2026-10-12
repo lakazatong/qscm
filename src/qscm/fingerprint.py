@@ -7,8 +7,7 @@ from typing import TypeGuard
 
 import networkx as nx
 
-Histogram = dict[int | float, float]
-Fingerprint = dict[str, Histogram]
+from .data import Fingerprint, Histogram, Vector
 
 
 def _histogram(values) -> Histogram:
@@ -314,9 +313,9 @@ def normalize_fingerprint(fingerprint: Fingerprint) -> Fingerprint:
     return result
 
 
-def fingerprint_vector(
+def fingerprint_vectors(
     fingerprint: Fingerprint, bounds: Mapping[str, tuple[int, int]] = VECTOR_BOUNDS
-) -> list[float]:
+) -> list[Vector]:
     """
     Crop and normalize a fingerprint, then flatten it into a fixed-size vector.
 
@@ -326,13 +325,10 @@ def fingerprint_vector(
     cropped = crop_fingerprint(fingerprint, bounds, discard=False)
     normalized = normalize_fingerprint(cropped)
 
-    vector = []
-
-    for name, (minimum, maximum) in bounds.items():
-        histogram = normalized.get(name, {})
-
-        vector.extend(
-            histogram.get(value, 0.0) for value in range(minimum, maximum + 1)
-        )
-
-    return vector
+    return [
+        [
+            normalized.get(name, {}).get(value, 0.0)
+            for value in range(minimum, maximum + 1)
+        ]
+        for name, (minimum, maximum) in bounds.items()
+    ]

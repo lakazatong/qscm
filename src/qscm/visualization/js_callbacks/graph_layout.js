@@ -189,17 +189,31 @@ function graph_layout(command, nClicks, fitClicks, initCount) {
 
         function waitForGraph(attempt = 0) {
             if (generation !== controller.generation || controller.graphKey !== graphKey) {
+                console.log("bye?");
                 return;
             }
 
             const cy = window.cy;
 
-            if (!cy || cy.nodes().length !== command.node_count) {
+            const graphReady =
+                cy &&
+                cy.nodes().length === command.node_count &&
+                cy.edges().length === command.edge_count;
+
+            if (!graphReady) {
                 if (attempt < 100) {
                     controller.timer = setTimeout(() => {
                         controller.timer = null;
                         waitForGraph(attempt + 1);
                     }, 50);
+                } else {
+                    console.error("Timed out waiting for graph", {
+                        expectedNodes: command.node_count,
+                        actualNodes: cy?.nodes().length,
+                        expectedEdges: command.edge_count,
+                        actualEdges: cy?.edges().length,
+                        graphKey,
+                    });
                 }
                 return;
             }

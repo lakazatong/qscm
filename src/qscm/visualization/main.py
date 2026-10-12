@@ -47,12 +47,17 @@ def create_app(cache_dir: Path, initial_name: str | None = None) -> dash.Dash:
             if default_name is not None
             else nx.DiGraph()
         )
-        initial_elements = graph_elements(initial_graph)
+
+        initial_graph_key = f"{default_name}:{default_graph_name if is_batch else None}"
+
+        initial_elements = graph_elements(initial_graph, initial_graph_key)
         initial_status = graph_status(initial_graph)
+
         initial_layout_command = {
             "action": "restart",
-            "graph_key": (f"{default_name}:{default_graph_name if is_batch else None}"),
+            "graph_key": initial_graph_key,
             "node_count": initial_graph.number_of_nodes(),
+            "edge_count": initial_graph.number_of_edges(),
         }
     except (OSError, ValueError, TypeError, pickle.UnpicklingError) as exc:
         initial_elements = []
@@ -61,6 +66,7 @@ def create_app(cache_dir: Path, initial_name: str | None = None) -> dash.Dash:
             "action": "restart",
             "graph_key": "empty",
             "node_count": 0,
+            "edge_count": 0,
         }
 
     app = dash.Dash(__name__, assets_folder=str(Path(__file__).parent / "assets"))
