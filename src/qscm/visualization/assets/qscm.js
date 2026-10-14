@@ -322,17 +322,17 @@
         return rows;
     }
 
-    function initializePositions(cy) {
-        // 1. Discover components
-        const components = getComponents(cy);
+    function initializePositions(components) {
+        const connected = components.filter((component) => !component.isolated);
+        const isolatedNodes = components
+            .filter((component) => component.isolated)
+            .flatMap((component) => component.nodes.toArray());
 
-        // 2. Arrange nodes inside each component
-        for (const component of components) {
+        for (const component of connected) {
             arrangeComponentLayers(component, EDGE_LENGTH);
         }
 
-        // 3. Arrange components in rows
-        const rows = groupComponentsIntoRows(components.slice(0, -1));
+        const rows = groupComponentsIntoRows(connected);
         let yOffset = 0;
 
         for (const row of rows) {
@@ -355,22 +355,30 @@
             yOffset += rowHeight + maxMargin;
         }
 
-        // 4. Move isolated nodes out of the way lol
-        const otherNodes = components
-            .slice(0, -1)
-            .flatMap((component) => component.nodes.toArray());
+        const connectedNodes = connected.flatMap((component) => component.nodes.toArray());
 
-        const globalBounds = getBounds(otherNodes);
-        const isolatedNodes = components.at(-1).nodes.toArray();
-        const margin = getComponentMargin(isolatedNodes.length);
+        if (isolatedNodes.length > 0 && connectedNodes.length > 0) {
+            const bounds = getBounds(connectedNodes);
+            const margin = getComponentMargin(isolatedNodes.length);
 
-        translateNodes(
-            isolatedNodes,
-            globalBounds.left + globalBounds.width + margin,
-            globalBounds.top + globalBounds.height + margin,
-        );
+            translateNodes(
+                isolatedNodes,
+                bounds.left + bounds.width + margin,
+                bounds.top + bounds.height + margin,
+            );
+        } else if (isolatedNodes.length > 0) {
+            arrangeComponentLayers(
+                { nodes: components.find((component) => component.isolated).nodes },
+                EDGE_LENGTH,
+            );
+            translateNodes(
+                isolatedNodes,
+                getComponentMargin(isolatedNodes.length),
+                getComponentMargin(isolatedNodes.length),
+            );
+        }
 
-        displaceNodes(otherNodes, FINAL_JITTER, FINAL_JITTER);
+        displaceNodes(connectedNodes, FINAL_JITTER, FINAL_JITTER);
     }
 
     // The graph pane is hidden while the fingerprint sidebar is expanded.
@@ -422,7 +430,8 @@
             return;
         }
 
-        initializePositions(cy);
+        const components = getComponents(cy);
+        initializePositions(components);
         layoutState.layout = cy.layout(colaOptions());
         startLayout();
         setToggleLabel(layoutState.enabled);
