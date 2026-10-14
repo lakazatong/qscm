@@ -216,19 +216,39 @@ body {
   border-radius: 8px;
 }
 
+.fingerprint-card > strong {
+  display: block;
+  margin-bottom: 12px;
+}
+
 .bars {
   display: flex;
-  align-items: flex-end;
-  gap: 5px;
-  height: 110px;
-  margin: 12px 0;
+  align-items: stretch;
+  gap: 4px;
+  height: 160px;
+  padding-top: 8px;
+}
+
+.bar-column {
+  flex: 1 1 0;
+  display: grid;
+  grid-template-rows: minmax(0, 1fr) auto;
+  min-width: 0;
 }
 
 .bar {
-  flex: 1;
-  min-width: 0;
+  align-self: end;
+  width: 100%;
   background: var(--accent);
-  border-radius: 3px 3px 0 0;
+  min-height: 0;
+}
+
+.bar-label {
+  margin-top: 5px;
+  font-size: 11px;
+  line-height: 1.2;
+  text-align: center;
+  overflow-wrap: anywhere;
 }
 
 .card-caption {

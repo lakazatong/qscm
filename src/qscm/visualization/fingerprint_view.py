@@ -12,9 +12,20 @@ def histogram_card(name: str, histogram: Histogram) -> html.Div:
 
     bars = [
         html.Div(
-            className="bar",
-            title=f"{'∞' if value == inf else value}: {probability:.4f}",
-            style={"height": f"{probability / maximum * 100 if maximum else 0:.2f}%"},
+            [
+                html.Div(
+                    className="bar",
+                    title=f"{'∞' if value == inf else value}: {probability:.4f}",
+                    style={
+                        "height": f"{probability / maximum * 100 if maximum else 0:.2f}%",
+                    },
+                ),
+                html.Div(
+                    "∞" if value == inf else str(value),
+                    className="bar-label",
+                ),
+            ],
+            className="bar-column",
         )
         for value, probability in sorted(histogram.items())
     ]
@@ -23,10 +34,6 @@ def histogram_card(name: str, histogram: Histogram) -> html.Div:
         [
             html.Strong(name),
             html.Div(bars, className="bars"),
-            html.Div(
-                f"{len(histogram)} bins · normalized distribution",
-                className="card-caption",
-            ),
         ],
         className="fingerprint-card",
     )

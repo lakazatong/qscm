@@ -40,10 +40,13 @@
 
     // ------------------------------------------------------------------- Layout
 
+    const EDGE_LENGTH = 50;
+
     const layoutState = {
         layout: null, // the cola layout of the current graph
+        enabled: true,
         running: false,
-        pausedWhileHidden: false,
+        canvasHidden: false,
     };
 
     function setToggleLabel(running) {
@@ -57,15 +60,30 @@
         layoutState.running = false;
     }
 
-    function setRunning(running) {
-        if (running) {
-            if (!layoutState.layout) return;
-            layoutState.layout.run();
-            layoutState.running = true;
+    function startLayout() {
+        if (
+            !layoutState.enabled ||
+            layoutState.canvasHidden ||
+            !layoutState.layout ||
+            layoutState.running
+        ) {
+            return;
+        }
+
+        layoutState.layout.run();
+        layoutState.running = true;
+    }
+
+    function setEnabled(enabled) {
+        layoutState.enabled = enabled;
+
+        if (enabled) {
+            startLayout();
         } else {
             stopLayout();
         }
-        setToggleLabel(running);
+
+        setToggleLabel(enabled);
     }
 
     function colaOptions() {
@@ -89,7 +107,7 @@
                 }
             },
 
-            edgeLength: 50,
+            edgeLength: EDGE_LENGTH,
         };
     }
 
@@ -126,64 +144,233 @@
         return components;
     }
 
-    // Start each component in a compact grid so the force simulation begins
-    // from a tidy state. O(V + E), no preliminary simulations.
-    function initializePositions(cy) {
+    // initial position helpers
+
+    // function getWeightedCentroid(nodes, getWeight = (node) => node.indegree() + node.outdegree()) {
+    //     let totalWeight = 0;
+    //     let x = 0;
+    //     let y = 0;
+
+    //     for (const node of nodes) {
+    //         const weight = getWeight(node);
+    //         const position = node.position();
+
+    //         totalWeight += weight;
+    //         x += position.x * weight;
+    //         y += position.y * weight;
+    //     }
+
+    //     if (totalWeight === 0) {
+    //         return {
+    //             x: nodes.reduce((sum, node) => sum + node.position("x"), 0) / nodes.length,
+    //             y: nodes.reduce((sum, node) => sum + node.position("y"), 0) / nodes.length,
+    //         };
+    //     }
+
+    //     return {
+    //         x: x / totalWeight,
+    //         y: y / totalWeight,
+    //     };
+    // }
+
+    const LAYER_ASPECT_RATIO = 16 / 9;
+    const FINAL_JITTER = 8;
+
+    function getComponentMargin(nodeCount) {
+        return Math.sqrt(nodeCount) * 128;
+    }
+
+    function getBounds(nodes) {
+        const positions = nodes.map((node) => node.position());
+
+        const xs = positions.map((p) => p.x);
+        const ys = positions.map((p) => p.y);
+
+        return {
+            left: Math.min(...xs),
+            top: Math.min(...ys),
+            width: Math.max(...xs) - Math.min(...xs),
+            height: Math.max(...ys) - Math.min(...ys),
+        };
+    }
+
+    function getComponents(cy) {
         const components = findComponents(cy);
         const connected = components
-            .filter((c) => !c.isolated)
+            .filter((component) => !component.isolated)
             .sort((a, b) => b.nodes.length - a.nodes.length);
-        const isolated = components.filter((c) => c.isolated);
 
-        const gap = 40;
-        const nodeGap = 34;
-        const margin = 30;
+        const isolatedNodes = components
+            .filter((component) => component.isolated)
+            .flatMap((component) => component.nodes.toArray());
 
-        let x = margin;
-        let y = margin;
-        let rowHeight = 0;
-        let right = margin;
-        let bottom = margin;
-
-        const totalNodes = connected.reduce((sum, c) => sum + c.nodes.length, 0);
-        const targetWidth = Math.max(500, Math.sqrt(totalNodes) * nodeGap * 1.8);
-
-        for (const component of connected) {
-            const count = component.nodes.length;
-            const columns = Math.ceil(Math.sqrt(count));
-            const rows = Math.ceil(count / columns);
-            const width = columns * nodeGap;
-            const height = rows * nodeGap;
-
-            if (x > margin && x + width > margin + targetWidth) {
-                x = margin;
-                y += rowHeight + gap;
-                rowHeight = 0;
-            }
-
-            component.nodes.positions((node, index) => ({
-                x: x + (index % columns) * nodeGap,
-                y: y + Math.floor(index / columns) * nodeGap,
-            }));
-
-            right = Math.max(right, x + width);
-            bottom = Math.max(bottom, y + height);
-
-            x += width + gap;
-            rowHeight = Math.max(rowHeight, height);
+        if (isolatedNodes.length > 0) {
+            connected.push({
+                nodes: cy.collection(isolatedNodes),
+                isolated: true,
+            });
         }
 
-        // Isolated nodes start in a grid below and to the right.
-        const isolatedColumns = Math.max(1, Math.ceil(Math.sqrt(isolated.length)));
-        const isolatedStartX = right + gap;
-        const isolatedStartY = bottom + gap;
+        return connected;
+    }
 
-        isolated.forEach((component, index) => {
-            component.nodes.position({
-                x: isolatedStartX + (index % isolatedColumns) * nodeGap,
-                y: isolatedStartY + Math.floor(index / isolatedColumns) * nodeGap,
+    function randomizeList(items) {
+        const result = [...items];
+
+        for (let i = result.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [result[i], result[j]] = [result[j], result[i]];
+        }
+
+        return result;
+    }
+
+    function translateNodes(nodes, dx, dy) {
+        for (const node of nodes) {
+            node.position({
+                x: node.position("x") + dx,
+                y: node.position("y") + dy,
             });
-        });
+        }
+    }
+
+    function groupIntoRows(items, aspectRatio) {
+        if (items.length === 0) return [];
+
+        let columns = 1;
+        let bestError = Infinity;
+
+        for (let candidate = 1; candidate <= items.length; candidate++) {
+            const rows = Math.ceil(items.length / candidate);
+            const error = Math.abs(candidate / rows - aspectRatio);
+
+            if (error < bestError) {
+                columns = candidate;
+                bestError = error;
+            }
+        }
+
+        const rows = [];
+
+        for (let i = 0; i < items.length; i += columns) {
+            rows.push(items.slice(i, i + columns));
+        }
+
+        return rows;
+    }
+
+    function arrangeComponentLayers(component, nodeGap) {
+        const nodes = component.nodes.toArray();
+
+        const layers = [
+            randomizeList(nodes.filter((node) => node.indegree() === 0)),
+            randomizeList(nodes.filter((node) => node.indegree() > 0 && node.outdegree() > 0)),
+            randomizeList(nodes.filter((node) => node.indegree() > 0 && node.outdegree() === 0)),
+        ].filter((layer) => layer.length > 0);
+
+        let y = 0;
+
+        for (const layer of layers) {
+            const rows = groupIntoRows(layer, LAYER_ASPECT_RATIO);
+
+            rows.forEach((row, rowIndex) => {
+                row.forEach((node, columnIndex) => {
+                    node.position({
+                        x: columnIndex * nodeGap,
+                        y: y + rowIndex * nodeGap,
+                    });
+                });
+            });
+
+            y += rows.length * nodeGap;
+        }
+    }
+
+    function displaceNodes(nodes, xDelta, yDelta) {
+        for (const node of nodes) {
+            node.position({
+                x: node.position("x") + (Math.random() - 0.5) * xDelta,
+                y: node.position("y") + (Math.random() - 0.5) * yDelta,
+            });
+        }
+    }
+
+    function groupComponentsIntoRows(components) {
+        if (components.length === 0) return [];
+
+        const sorted = [...components].sort((a, b) => b.nodes.length - a.nodes.length);
+
+        const targetRowSize = Math.ceil(Math.sqrt(sorted.length));
+        const rows = [];
+        let offset = 0;
+
+        while (offset < sorted.length) {
+            let end = Math.min(offset + targetRowSize, sorted.length);
+
+            // Keep components of equal size together.
+            while (
+                end < sorted.length &&
+                sorted[end - 1].nodes.length === sorted[end].nodes.length
+            ) {
+                end++;
+            }
+
+            rows.push(sorted.slice(offset, end));
+            offset = end;
+        }
+
+        return rows;
+    }
+
+    function initializePositions(cy) {
+        // 1. Discover components
+        const components = getComponents(cy);
+
+        // 2. Arrange nodes inside each component
+        for (const component of components) {
+            arrangeComponentLayers(component, EDGE_LENGTH);
+        }
+
+        // 3. Arrange components in rows
+        const rows = groupComponentsIntoRows(components.slice(0, -1));
+        let yOffset = 0;
+
+        for (const row of rows) {
+            let xOffset = 0;
+            let rowHeight = 0;
+            let maxMargin = 0;
+
+            for (const component of row) {
+                const nodes = component.nodes.toArray();
+                const bounds = getBounds(nodes);
+                const margin = getComponentMargin(nodes.length);
+
+                translateNodes(nodes, xOffset - bounds.left, yOffset - bounds.top);
+
+                xOffset += bounds.width + margin;
+                rowHeight = Math.max(rowHeight, bounds.height);
+                maxMargin = Math.max(maxMargin, margin);
+            }
+
+            yOffset += rowHeight + maxMargin;
+        }
+
+        // 4. Move isolated nodes out of the way lol
+        const otherNodes = components
+            .slice(0, -1)
+            .flatMap((component) => component.nodes.toArray());
+
+        const globalBounds = getBounds(otherNodes);
+        const isolatedNodes = components.at(-1).nodes.toArray();
+        const margin = getComponentMargin(isolatedNodes.length);
+
+        translateNodes(
+            isolatedNodes,
+            globalBounds.left + globalBounds.width + margin,
+            globalBounds.top + globalBounds.height + margin,
+        );
+
+        displaceNodes(otherNodes, FINAL_JITTER, FINAL_JITTER);
     }
 
     // The graph pane is hidden while the fingerprint sidebar is expanded.
@@ -197,28 +384,21 @@
 
         new ResizeObserver(() => {
             const hidden = element.clientWidth === 0 && element.clientHeight === 0;
+            layoutState.canvasHidden = hidden;
 
             if (hidden) {
-                if (layoutState.running) {
-                    layoutState.pausedWhileHidden = true;
-                    setRunning(false);
-                }
+                stopLayout();
                 return;
             }
 
             cy.resize();
-
-            if (layoutState.pausedWhileHidden) {
-                layoutState.pausedWhileHidden = false;
-                setRunning(true);
-            }
+            startLayout();
         }).observe(element);
     }
 
     function replaceGraph(cy, payload) {
         stopLayout();
         layoutState.layout = null;
-        layoutState.pausedWhileHidden = false;
 
         cy.batch(() => {
             cy.elements().remove();
@@ -238,13 +418,14 @@
         observeCanvasSize(cy);
 
         if (cy.nodes().length === 0) {
-            setToggleLabel(false);
+            setToggleLabel(layoutState.enabled);
             return;
         }
 
         initializePositions(cy);
         layoutState.layout = cy.layout(colaOptions());
-        setRunning(true);
+        startLayout();
+        setToggleLabel(layoutState.enabled);
     }
 
     let latestRequest = 0;
@@ -262,7 +443,11 @@
 
     function fitGraph() {
         const cy = getCy();
-        if (cy) cy.fit(cy.elements(), 30);
+        if (cy) {
+            const connectedNodes = cy.nodes().filter((node) => node.degree() > 0);
+            const connectedElements = connectedNodes.union(connectedNodes.connectedEdges());
+            cy.fit(connectedElements, 30);
+        }
     }
 
     // ------------------------------------------------- Fingerprint sidebar drag
@@ -312,7 +497,7 @@
             const triggered = window.dash_clientside.callback_context.triggered_id;
 
             if (triggered === "layout-toggle") {
-                setRunning(!layoutState.running);
+                setEnabled(!layoutState.enabled);
             } else if (triggered === "fit-graph") {
                 fitGraph();
             } else {
