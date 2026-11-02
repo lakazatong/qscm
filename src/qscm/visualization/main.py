@@ -1,9 +1,13 @@
+from __future__ import annotations
+
 import threading
 import webbrowser
 from pathlib import Path
+from typing import TYPE_CHECKING
 
-import dash
-import dash_cytoscape as cyto
+if TYPE_CHECKING:
+    import dash
+
 
 from qscm.cache import discover_items
 from qscm.config import APP_TITLE, ASSETS_DIR, DASH_HOST, DASH_PORT
@@ -13,6 +17,9 @@ from .layout import create_layout
 
 
 def create_app(cache_dir: Path, initial_name: str | None = None) -> dash.Dash:
+    import dash
+    import dash_cytoscape as cyto
+
     """Create the interactive graph browser."""
     items = discover_items(cache_dir)
 

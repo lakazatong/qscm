@@ -1,3 +1,3 @@
-from qscm.visualization.main import create_app, run_visualizer
+from qscm.visualization.main import run_visualizer
 
-__all__ = ["create_app", "run_visualizer"]
+__all__ = ["run_visualizer"]

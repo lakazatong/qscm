@@ -1,8 +1,11 @@
 """Conversion of NetworkX graphs into data for the Cytoscape canvas."""
 
-from typing import Any
+from __future__ import annotations
 
-import networkx as nx
+from typing import TYPE_CHECKING, Any
+
+if TYPE_CHECKING:
+    import networkx as nx
 
 from qscm.data import require_digraph
 

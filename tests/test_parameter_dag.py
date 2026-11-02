@@ -94,7 +94,8 @@ def test_variable_can_be_overridden_but_not_duplicated_by_default():
 
 def test_regime_dags_resolve_and_check():
     for regimes in REGIMES.values():
-        for regime in regimes.values():
+        for get_regime in regimes.values():
+            regime = get_regime()
             if regime.name == "custom":
                 continue
             values = regime.resolve_regime({"n": 20}, rng=random.Random(4))

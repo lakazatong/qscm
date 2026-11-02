@@ -159,12 +159,12 @@ def test_custom_cannot_be_requested_manually():
 
 def test_regime_applicability_matches_its_parameter_constraints():
     regimes = get_regimes("random_regular")
-    assert not regimes["higher_degree"].is_defined_for(3)
-    assert regimes["matching"].is_defined_for(4)
+    assert not regimes["higher_degree"]().is_defined_for(3)
+    assert regimes["matching"]().is_defined_for(4)
 
     regimes = get_regimes("barabasi_albert")
-    assert not regimes["higher_attachment"].is_defined_for(4)
-    assert regimes["tree_like"].is_defined_for(2)
+    assert not regimes["higher_attachment"]().is_defined_for(4)
+    assert regimes["tree_like"]().is_defined_for(2)
 
 
 def test_base_node_count_must_match_requested_node_count():
@@ -245,7 +245,8 @@ def test_custom_watts_strogatz_has_no_named_sampling_cap():
 )
 def test_every_available_named_regime_builds_a_networkx_graph(model, networkx_function):
     sampler = SAMPLERS[model]
-    for name, regime in get_regimes(model).items():
+    for name, get_regime in get_regimes(model).items():
+        regime = get_regime()
         if name == "custom" or not regime.is_defined_for(20):
             continue
         sampled = sampler(

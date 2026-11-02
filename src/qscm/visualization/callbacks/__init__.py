@@ -1,6 +1,10 @@
-from pathlib import Path
+from __future__ import annotations
 
-import dash
+from pathlib import Path
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    import dash
 
 from . import client, fingerprints, graph, navigation
 

@@ -29,7 +29,7 @@ _RESERVED_FIELDS = {"directed", "n"}
 @cache
 def _discover_fields(model: str) -> dict[tuple[str, str], Any]:
     """Map (group, name) -> default value for every option a model supports."""
-    sampled = MODELS[model].sample(10, random.Random(0), None)
+    sampled = MODELS[model].sample(10, random.Random(0), None, mockup=True)
     fields = {}
 
     for group in _SAMPLE_GROUPS:
@@ -107,10 +107,11 @@ def _make_base(args: Namespace) -> SampledModel:
 
 
 def format_regime_help(model: str) -> str:
-    return "\n".join(
-        f"  {name:<22} {regime.format():<32} {regime.description}"
-        for name, regime in REGIMES[model].items()
-    )
+    helps = []
+    for name, get_regime in REGIMES[model].items():
+        regime = get_regime()
+        helps.append(f"  {name:<22} {regime.format():<32} {regime.description}")
+    return "\n".join(helps)
 
 
 def _require(args: Namespace, *names: str) -> None:
@@ -316,11 +317,11 @@ def _add_batch_options(parser: argparse.ArgumentParser) -> None:
 
 
 def _add_model_subparsers(subparsers, add_common_options, func) -> None:
-    for model in MODELS:
-        model_parser = subparsers.add_parser(model)
+    for model_name in MODELS:
+        model_parser = subparsers.add_parser(model_name)
         add_common_options(model_parser)
-        _add_model_options(model_parser, model)
-        model_parser.set_defaults(func=func, model=model)
+        _add_model_options(model_parser, model_name)
+        model_parser.set_defaults(func=func, model=model_name)
 
     # Random selection uses model defaults and exposes no model options.
     random_parser = subparsers.add_parser(
@@ -360,7 +361,7 @@ def register_parser(subparsers) -> None:
     """Register all generation-related commands under 'generate'."""
     generate_parser = subparsers.add_parser(
         "generate",
-        help="Generate graphs, batches, or manage the cache.",
+        help="Generate graphs and batches of graphs.",
     )
     generate_subparsers = generate_parser.add_subparsers(
         dest="generate_command",

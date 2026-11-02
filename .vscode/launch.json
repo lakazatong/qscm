@@ -1,0 +1,14 @@
+{
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "qscm --help",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "qscm",
+            "args": ["--help"],
+            "console": "integratedTerminal",
+            "justMyCode": false
+        }
+    ]
+}

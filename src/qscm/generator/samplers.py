@@ -72,7 +72,7 @@ def _collect_base_values(
     return supplied
 
 
-def _resolve_regime(
+def _resolve_model(
     model: str,
     supplied: Mapping[str, Any],
     rng: random.Random,
@@ -96,21 +96,22 @@ def _resolve_regime(
                 "The custom regime is selected automatically from model parameters."
             )
         name = requested
-        regime = regimes[name]
+        regime = regimes[name]()
     elif has_model_parameters:
         name = "custom"
         try:
-            regime = regimes[name]
+            regime = regimes[name]()
         except KeyError as exc:
             raise ValueError(
                 f"No custom parameter definition exists for {model}."
             ) from exc
     else:
-        available = tuple(
-            (name, regime)
-            for name, regime in regimes.items()
-            if name != "custom" and regime.is_defined_for(int(supplied["n"]))
-        )
+        available = []
+        for name, get_regime in regimes.items():
+            regime = get_regime()
+            if name != "custom" and regime.is_defined_for(int(supplied["n"])):
+                available.append((name, regime))
+        available = tuple(available)
         if not available:
             raise ValueError(
                 f"No named {model} regime is defined for n={supplied['n']}."
@@ -139,12 +140,12 @@ def _seeds(
     return nx_seed, orientation_seed
 
 
-def _postprocess_kwargs(seed: int | None) -> dict[str, int] | None:
-    return {"seed": seed} if seed is not None else None
-
-
 def erdos_renyi(
-    n: int, rng: random.Random, base: SampledModel | None = None
+    n: int,
+    rng: random.Random,
+    base: SampledModel | None = None,
+    *,
+    mockup: bool = False,
 ) -> SampledModel:
     nx_seed, _ = _seeds(base, rng, postprocess=False)
     supplied = _collect_base_values(
@@ -154,49 +155,69 @@ def erdos_renyi(
         kwarg_names=("seed",),
         parameter_names=("branching_factor", "mean_out"),
     )
-    regime_name, values = _resolve_regime("erdos_renyi", supplied, rng, base)
+    regime_name, values = (
+        (None, {}) if mockup else _resolve_model("erdos_renyi", supplied, rng, base)
+    )
     return SampledModel(
-        args={"n": n, "p": values["p"]},
+        args={"n": n, "p": values.get("p", None)},
         kwargs={"seed": nx_seed, "directed": True},
         parameters={
             "regime": regime_name,
-            "branching_factor": values["branching_factor"],
-            "mean_out": values["mean_out"],
+            "branching_factor": values.get("branching_factor", None),
+            "mean_out": values.get("mean_out", None),
         },
     )
 
 
-def gnm(n: int, rng: random.Random, base: SampledModel | None = None) -> SampledModel:
+def gnm(
+    n: int,
+    rng: random.Random,
+    base: SampledModel | None = None,
+    *,
+    mockup: bool = False,
+) -> SampledModel:
     nx_seed, _ = _seeds(base, rng, postprocess=False)
     supplied = _collect_base_values(
         n, base, arg_names=("m",), kwarg_names=("seed",), parameter_names=("mean_out",)
     )
-    regime_name, values = _resolve_regime("gnm", supplied, rng, base)
+    regime_name, values = (
+        (None, {}) if mockup else _resolve_model("gnm", supplied, rng, base)
+    )
     return SampledModel(
-        args={"n": n, "m": values["m"]},
+        args={"n": n, "m": values.get("m", None)},
         kwargs={"seed": nx_seed, "directed": True},
-        parameters={"regime": regime_name, "mean_out": values["mean_out"]},
+        parameters={"regime": regime_name, "mean_out": values.get("mean_out", None)},
     )
 
 
 def barabasi_albert(
-    n: int, rng: random.Random, base: SampledModel | None = None
+    n: int,
+    rng: random.Random,
+    base: SampledModel | None = None,
+    *,
+    mockup: bool = False,
 ) -> SampledModel:
     nx_seed, orientation_seed = _seeds(base, rng, postprocess=True)
     supplied = _collect_base_values(
         n, base, arg_names=("m",), kwarg_names=("seed",), postprocess_names=("seed",)
     )
-    regime_name, values = _resolve_regime("barabasi_albert", supplied, rng, base)
+    regime_name, values = (
+        (None, {}) if mockup else _resolve_model("barabasi_albert", supplied, rng, base)
+    )
     return SampledModel(
-        args={"n": n, "m": values["m"]},
+        args={"n": n, "m": values.get("m", None)},
         kwargs={"seed": nx_seed},
         parameters={"regime": regime_name},
-        postprocess_kwargs=_postprocess_kwargs(orientation_seed),
+        postprocess_kwargs={"seed": orientation_seed},
     )
 
 
 def watts_strogatz(
-    n: int, rng: random.Random, base: SampledModel | None = None
+    n: int,
+    rng: random.Random,
+    base: SampledModel | None = None,
+    *,
+    mockup: bool = False,
 ) -> SampledModel:
     nx_seed, orientation_seed = _seeds(base, rng, postprocess=True)
     supplied = _collect_base_values(
@@ -206,51 +227,63 @@ def watts_strogatz(
         kwarg_names=("seed",),
         postprocess_names=("seed",),
     )
-    regime_name, values = _resolve_regime("watts_strogatz", supplied, rng, base)
+    regime_name, values = (
+        (None, {}) if mockup else _resolve_model("watts_strogatz", supplied, rng, base)
+    )
     return SampledModel(
-        args={"n": n, "k": values["k"], "p": values["p"]},
+        args={"n": n, "k": values.get("k", None), "p": values.get("p", None)},
         kwargs={"seed": nx_seed},
         parameters={"regime": regime_name},
-        postprocess_kwargs=_postprocess_kwargs(orientation_seed),
+        postprocess_kwargs={"seed": orientation_seed},
     )
 
 
 def random_regular(
-    n: int, rng: random.Random, base: SampledModel | None = None
+    n: int,
+    rng: random.Random,
+    base: SampledModel | None = None,
+    *,
+    mockup: bool = False,
 ) -> SampledModel:
     nx_seed, orientation_seed = _seeds(base, rng, postprocess=True)
     supplied = _collect_base_values(
         n, base, arg_names=("d",), kwarg_names=("seed",), postprocess_names=("seed",)
     )
-    regime_name, values = _resolve_regime("random_regular", supplied, rng, base)
+    regime_name, values = (
+        (None, {}) if mockup else _resolve_model("random_regular", supplied, rng, base)
+    )
     return SampledModel(
-        args={"n": n, "d": values["d"]},
+        args={"n": n, "d": values.get("d", None)},
         kwargs={"seed": nx_seed},
         parameters={"regime": regime_name},
-        postprocess_kwargs=_postprocess_kwargs(orientation_seed),
+        postprocess_kwargs={"seed": orientation_seed},
     )
 
 
 def random_tree(
-    n: int, rng: random.Random, base: SampledModel | None = None
+    n: int,
+    rng: random.Random,
+    base: SampledModel | None = None,
+    *,
+    mockup: bool = False,
 ) -> SampledModel:
     nx_seed, orientation_seed = _seeds(base, rng, postprocess=True)
     supplied = _collect_base_values(
         n, base, kwarg_names=("seed",), postprocess_names=("seed",)
     )
-    regime_name, values = _resolve_regime("random_tree", supplied, rng, base)
+    regime_name, values = (
+        (None, {}) if mockup else _resolve_model("random_tree", supplied, rng, base)
+    )
     return SampledModel(
-        args={"n": values["n"]},
+        args={"n": values.get("n", None)},
         kwargs={"seed": nx_seed},
         parameters={"regime": regime_name},
-        postprocess_kwargs=_postprocess_kwargs(orientation_seed),
+        postprocess_kwargs={"seed": orientation_seed},
     )
 
 
 def stochastic_block(
-    n: int,
-    rng: random.Random,
-    base: SampledModel | None = None,
+    n: int, rng: random.Random, base: SampledModel | None = None, *, mockup=False
 ) -> SampledModel:
     nx_seed, orientation_seed = _seeds(base, rng, postprocess=True)
 
@@ -263,23 +296,27 @@ def stochastic_block(
         postprocess_names=("seed",),
     )
 
-    regime_name, values = _resolve_regime("stochastic_block", supplied, rng, base)
+    regime_name, values = (
+        (None, {})
+        if mockup
+        else _resolve_model("stochastic_block", supplied, rng, base)
+    )
 
-    parameters = {"regime": regime_name, "count": values["count"]}
+    parameters = {"regime": regime_name, "count": values.get("count", None)}
 
     for key, diagonal in (("p_in", True), ("p_out", False)):
         try:
             parameters[key] = _matrix_probability(
-                values["p"],
+                values.get("p", None),
                 diagonal=diagonal,
-                count=values["count"],
+                count=values.get("count", 0),
             )
         except ValueError:
             pass
 
     return SampledModel(
-        args={"sizes": values["sizes"], "p": values["p"]},
+        args={"sizes": values.get("sizes", None), "p": values.get("p", None)},
         kwargs={"seed": nx_seed},
         parameters=parameters,
-        postprocess_kwargs=_postprocess_kwargs(orientation_seed),
+        postprocess_kwargs={"seed": orientation_seed},
     )

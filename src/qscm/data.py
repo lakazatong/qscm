@@ -1,7 +1,10 @@
-from collections.abc import Iterable, Sequence
-from typing import TypeGuard
+from __future__ import annotations
 
-import networkx as nx
+from collections.abc import Iterable, Sequence
+from typing import TYPE_CHECKING, TypeGuard
+
+if TYPE_CHECKING:
+    import networkx as nx
 
 # fingerprint
 Histogram = dict[int | float, float]
@@ -16,6 +19,8 @@ Points = Iterable[Vector]
 
 
 def require_digraph(G: nx.Graph) -> TypeGuard[nx.DiGraph]:
+    import networkx as nx
+
     if not G.is_directed():
         raise TypeError("Expected a directed graph.")
     if G.is_multigraph():

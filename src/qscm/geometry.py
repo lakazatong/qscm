@@ -1,11 +1,18 @@
-import numpy as np
-import numpy.typing as npt
-from scipy.spatial import ConvexHull, QhullError
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    import numpy as np
+    import numpy.typing as npt
+
 
 from .data import Points, Vector
 
 
 def _points_array(points: Points) -> npt.NDArray[np.float64]:
+    import numpy as np
+
     array = np.asarray(list(points), dtype=np.float64)
 
     if array.ndim != 2 or array.shape[0] == 0 or array.shape[1] == 0:
@@ -19,6 +26,10 @@ def _points_array(points: Points) -> npt.NDArray[np.float64]:
 
 def hypervolume(points: Points) -> float:
     """Compute the N-dimensional volume of the points' convex hull."""
+
+    import numpy as np
+    from scipy.spatial import ConvexHull, QhullError
+
     array = _points_array(points)
     count, dimension = array.shape
 
@@ -41,11 +52,15 @@ def hypervolume(points: Points) -> float:
 
 def barycenter(points: Points) -> npt.NDArray[np.float64]:
     """Compute the arithmetic mean of the points' coordinates."""
+    import numpy as np
+
     return np.mean(_points_array(points), axis=0)
 
 
 def distance_statistics(points: Points, center: Vector) -> dict[str, float]:
     """Compute Euclidean distance statistics relative to a center."""
+    import numpy as np
+
     array = _points_array(points)
     center_array = np.asarray(center, dtype=np.float64)
 

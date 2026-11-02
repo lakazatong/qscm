@@ -1,10 +1,14 @@
 # qscm/fingerprint.py
+from __future__ import annotations
 
 from collections import Counter
 from collections.abc import Mapping
 from math import inf
+from typing import TYPE_CHECKING
 
-import networkx as nx
+if TYPE_CHECKING:
+    import networkx as nx
+
 
 from .data import Fingerprint, Histogram, Vector
 
@@ -37,10 +41,16 @@ def out_degree_histogram(G: nx.DiGraph) -> Histogram:
 def _depths_and_heights(
     G: nx.DiGraph,
 ) -> tuple[dict, dict]:
+    from networkx import (
+        condensation,
+        strongly_connected_components,
+        topological_sort,
+    )
+
     if len(G) == 0:
         return {}, {}
 
-    components = list(nx.strongly_connected_components(G))
+    components = list(strongly_connected_components(G))
     component_of = {
         node: i for i, component in enumerate(components) for node in component
     }
@@ -50,22 +60,19 @@ def _depths_and_heights(
         if len(component) > 1 or any(G.has_edge(node, node) for node in component)
     }
 
-    condensation = nx.condensation(G, components)
-    order = list(nx.topological_sort(condensation))
+    cond = condensation(G, components)
+    order = list(topological_sort(cond))
     infinite_depth = set(cyclic)
     infinite_height = set(cyclic)
 
     for component in reversed(order):
-        if any(
-            successor in infinite_depth
-            for successor in condensation.successors(component)
-        ):
+        if any(successor in infinite_depth for successor in cond.successors(component)):
             infinite_depth.add(component)
 
     for component in order:
         if any(
             predecessor in infinite_height
-            for predecessor in condensation.predecessors(component)
+            for predecessor in cond.predecessors(component)
         ):
             infinite_height.add(component)
 
@@ -73,7 +80,7 @@ def _depths_and_heights(
     height = {node: inf for node in G if component_of[node] in infinite_height}
 
     finite_depth = set(G) - depth.keys()
-    depth_order = list(nx.topological_sort(G.subgraph(finite_depth)))
+    depth_order = list(topological_sort(G.subgraph(finite_depth)))
 
     for node in reversed(depth_order):
         depth[node] = max(
@@ -82,7 +89,7 @@ def _depths_and_heights(
         )
 
     finite_height = set(G) - height.keys()
-    height_order = list(nx.topological_sort(G.subgraph(finite_height)))
+    height_order = list(topological_sort(G.subgraph(finite_height)))
 
     for node in height_order:
         height[node] = max(
@@ -140,7 +147,10 @@ def pair_impact_histogram(G: nx.DiGraph) -> Histogram:
 
 def _reachability_pairs(G: nx.DiGraph) -> set[tuple]:
     """Return reachable ordered pairs, excluding self-pairs."""
-    return {(source, target) for source in G for target in nx.descendants(G, source)}
+
+    from networkx import descendants
+
+    return {(source, target) for source in G for target in descendants(G, source)}
 
 
 def _edge_impacts(G: nx.DiGraph) -> list[tuple[int, int, int]]:
@@ -167,15 +177,21 @@ def _edge_impacts(G: nx.DiGraph) -> list[tuple[int, int, int]]:
 
 
 def cycle_length_histogram(G: nx.DiGraph) -> Histogram:
-    return _histogram(len(cycle) for cycle in nx.simple_cycles(G))
+
+    from networkx import simple_cycles
+
+    return _histogram(len(cycle) for cycle in simple_cycles(G))
 
 
 def node_cycle_participation_histogram(
     G: nx.DiGraph,
 ) -> Histogram:
+
+    from networkx import simple_cycles
+
     participation = dict.fromkeys(G.nodes, 0)
 
-    for cycle in nx.simple_cycles(G):
+    for cycle in simple_cycles(G):
         for node in cycle:
             participation[node] += 1
 
@@ -183,14 +199,20 @@ def node_cycle_participation_histogram(
 
 
 def cycle_span_histogram(G: nx.DiGraph) -> Histogram:
+
+    from networkx import (
+        simple_cycles,
+        single_source_shortest_path_length,
+    )
+
     undirected = G.to_undirected()
     spans = []
 
-    for cycle in nx.simple_cycles(G):
+    for cycle in simple_cycles(G):
         span = 0
 
         for source in cycle:
-            distances = nx.single_source_shortest_path_length(undirected, source)
+            distances = single_source_shortest_path_length(undirected, source)
             span = max(
                 span,
                 *(distances[target] for target in cycle),
@@ -206,8 +228,14 @@ def cycle_span_histogram(G: nx.DiGraph) -> Histogram:
 
 def graph_fingerprint(G: nx.DiGraph) -> Fingerprint:
     """Compute all graph fingerprint histograms."""
+
+    from networkx import (
+        simple_cycles,
+        single_source_shortest_path_length,
+    )
+
     depth, height = _depths_and_heights(G)
-    cycles = list(nx.simple_cycles(G))
+    cycles = list(simple_cycles(G))
     upstream, downstream, pairs = edge_impact_histograms(G)
 
     participation = dict.fromkeys(G.nodes, 0)
@@ -221,7 +249,7 @@ def graph_fingerprint(G: nx.DiGraph) -> Fingerprint:
     for cycle in cycles:
         span = 0
         for source in cycle:
-            distances = nx.single_source_shortest_path_length(undirected, source)
+            distances = single_source_shortest_path_length(undirected, source)
             span = max(span, *(distances[target] for target in cycle))
         spans.append(span)
 

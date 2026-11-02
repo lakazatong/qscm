@@ -3,20 +3,20 @@
 import pickle
 from pathlib import Path
 
-from dash import Input, Output, State
-
 from qscm.cache import load_graph
 from qscm.visualization.cytoscape import empty_payload, graph_payload, graph_status
 
 
 def register(app, cache_dir: Path) -> None:
+    import dash
+
     @app.callback(
-        Output("graph-data", "data"),
-        Output("graph-status", "children"),
-        Input("item-selector", "value"),
-        Input("graph-selector", "value"),
-        Input("reload-graph", "n_clicks"),
-        State("cached-items", "data"),
+        dash.Output("graph-data", "data"),
+        dash.Output("graph-status", "children"),
+        dash.Input("item-selector", "value"),
+        dash.Input("graph-selector", "value"),
+        dash.Input("reload-graph", "n_clicks"),
+        dash.State("cached-items", "data"),
     )
     def update_graph(name, graph_name, reload_clicks, items):
         token = reload_clicks or 0

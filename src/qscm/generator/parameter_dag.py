@@ -5,9 +5,10 @@ import re
 from collections.abc import Callable, Iterable, Mapping
 from dataclasses import dataclass, field
 from numbers import Real
-from typing import Any, cast
+from typing import TYPE_CHECKING, Any, cast
 
-import sympy as sp
+if TYPE_CHECKING:
+    import sympy as sp
 
 Sampler = Callable[[dict[str, Any]], Any]
 Validator = Callable[[Any, dict[str, Any]], None]
@@ -85,6 +86,8 @@ class ParameterDAG:
         description: str | None = None,
         override: bool = False,
     ) -> ParameterDAG:
+        import sympy as sp
+
         if not isinstance(name, str) or not re.fullmatch(r"[A-Za-z_]\w*", name):
             raise ValueError(f"Invalid variable name {name!r}.")
         if name in self._variables and not override:
@@ -144,6 +147,8 @@ class ParameterDAG:
         return self
 
     def add_equation(self, equation: str) -> ParameterDAG:
+        import sympy as sp
+
         if not isinstance(equation, str):
             raise TypeError("An equation must be provided as a string.")
         match = re.fullmatch(r"\s*(.*?)\s*(?<![<>=!])=(?!=)\s*(.*?)\s*", equation)
@@ -260,6 +265,8 @@ class ParameterDAG:
     def _derive_one(
         self, values: Mapping[str, Any], missing: Iterable[str]
     ) -> tuple[str, Any] | None:
+        import sympy as sp
+
         missing_names = set(missing)
         for equation in self._equations:
             for name in equation.symbols & missing_names:
@@ -349,6 +356,8 @@ class ParameterDAG:
     def _evaluate(
         self, expression: sp.Basic, values: Mapping[str, Any], *, target: str
     ) -> Any:
+        import sympy as sp
+
         substitutions = {}
         for symbol in expression.free_symbols:
             name = str(symbol)
@@ -396,6 +405,8 @@ class ParameterDAG:
 
     @staticmethod
     def _validate_equation_unambiguous(equation: _Equation) -> None:
+        import sympy as sp
+
         for name in equation.symbols:
             symbol = sp.Symbol(name)
             try:
@@ -418,6 +429,8 @@ class ParameterDAG:
 
     @staticmethod
     def _validate_equation_consistency(equations: Iterable[_Equation]) -> None:
+        import sympy as sp
+
         equations = tuple(equations)
         if not equations:
             return

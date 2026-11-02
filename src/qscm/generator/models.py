@@ -1,6 +1,10 @@
-import random
+from __future__ import annotations
 
-import networkx as nx
+import random
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    import networkx as nx
 
 from qscm.generator import samplers
 
@@ -9,6 +13,8 @@ from .regimes import get_regimes
 
 
 def random_edge_orientation(G: nx.Graph, seed: int) -> nx.DiGraph:
+    import networkx as nx
+
     """Randomly orient every undirected edge."""
     rng = random.Random(seed)
     result = nx.DiGraph()

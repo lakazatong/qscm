@@ -1,9 +1,6 @@
 import argparse
 import json
 
-import numpy as np
-from scipy.linalg import helmert
-
 from qscm.cache import graph_files, read_graph, valid_name
 from qscm.config import CACHE_DIR
 from qscm.data import Vector, require_digraph
@@ -12,6 +9,9 @@ from qscm.geometry import barycenter, distance_statistics, hypervolume
 
 
 def geometry(args: argparse.Namespace) -> None:
+    import numpy as np
+    from scipy.linalg import helmert
+
     batch_path = CACHE_DIR / args.batch_name
 
     if not valid_name(args.batch_name) or not batch_path.is_dir():

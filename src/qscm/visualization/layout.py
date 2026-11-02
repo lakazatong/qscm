@@ -1,19 +1,27 @@
 """Static page layout. All styling lives in assets/qscm.css."""
 
-import dash_cytoscape as cyto
-from dash import dcc, html
+from __future__ import annotations
+
+from typing import TYPE_CHECKING
+
+if TYPE_CHECKING:
+    import dash
 
 from .cytoscape import STYLESHEET
 
 
-def _button(label: str, id: str, title: str | None = None) -> html.Button:
-    return html.Button(label, id=id, n_clicks=0, title=title)
+def _button(label: str, id: str, title: str | None = None) -> dash.html.Button:
+    import dash
+
+    return dash.html.Button(label, id=id, n_clicks=0, title=title)
 
 
-def _toolbar(items, default_name) -> html.Div:
-    return html.Div(
+def _toolbar(items, default_name) -> dash.html.Div:
+    import dash
+
+    return dash.html.Div(
         [
-            html.Div(
+            dash.html.Div(
                 _button(
                     "Hide metadata",
                     "toggle-metadata",
@@ -21,9 +29,9 @@ def _toolbar(items, default_name) -> html.Div:
                 ),
                 className="toolbar-group",
             ),
-            html.Div(
+            dash.html.Div(
                 [
-                    dcc.Dropdown(
+                    dash.dcc.Dropdown(
                         id="item-selector",
                         options=items,
                         value=default_name,
@@ -38,9 +46,9 @@ def _toolbar(items, default_name) -> html.Div:
                 className="toolbar-group",
             ),
             # Only shown while a batch is selected.
-            html.Div(
+            dash.html.Div(
                 [
-                    dcc.Dropdown(
+                    dash.dcc.Dropdown(
                         id="graph-selector",
                         options=[],
                         placeholder="Select graph...",
@@ -54,21 +62,21 @@ def _toolbar(items, default_name) -> html.Div:
                 id="batch-navigation",
                 className="toolbar-group is-hidden",
             ),
-            html.Div(
+            dash.html.Div(
                 [
                     _button("Reload graph", "reload-graph"),
                     _button("Random graph", "random-graph"),
                 ],
                 className="toolbar-group",
             ),
-            html.Div(
+            dash.html.Div(
                 [
                     _button("Pause layout", "layout-toggle"),
                     _button("Fit graph", "fit-graph"),
                 ],
                 className="toolbar-group",
             ),
-            html.Div(
+            dash.html.Div(
                 _button("Fingerprints", "toggle-fingerprints"),
                 className="toolbar-group",
             ),
@@ -77,8 +85,11 @@ def _toolbar(items, default_name) -> html.Div:
     )
 
 
-def _graph_pane() -> html.Div:
-    return html.Div(
+def _graph_pane() -> dash.html.Div:
+    import dash
+    import dash_cytoscape as cyto
+
+    return dash.html.Div(
         [
             # The canvas is only a host: the browser fills it directly
             # (see assets/qscm.js), so `elements` stays empty on purpose.
@@ -103,8 +114,8 @@ def _graph_pane() -> html.Div:
                     "height": "100%",
                 },
             ),
-            html.Div(
-                html.Div(id="graph-status"),
+            dash.html.Div(
+                dash.html.Div(id="graph-status"),
                 id="metadata-panel",
                 className="metadata-panel",
             ),
@@ -113,13 +124,15 @@ def _graph_pane() -> html.Div:
     )
 
 
-def _fingerprint_sidebar() -> html.Div:
-    return html.Div(
+def _fingerprint_sidebar() -> dash.html.Div:
+    import dash
+
+    return dash.html.Div(
         [
-            html.Div(
+            dash.html.Div(
                 [
-                    html.Strong("Fingerprints"),
-                    html.Div(
+                    dash.html.Strong("Fingerprints"),
+                    dash.html.Div(
                         [
                             _button("Expand", "expand-fingerprints"),
                             _button("Close", "close-fingerprints"),
@@ -129,7 +142,7 @@ def _fingerprint_sidebar() -> html.Div:
                 ],
                 className="sidebar-header",
             ),
-            html.Div(
+            dash.html.Div(
                 "Click Fingerprints to compute the graph fingerprints.",
                 id="fingerprint-content",
                 className="fingerprint-grid",
@@ -140,21 +153,23 @@ def _fingerprint_sidebar() -> html.Div:
     )
 
 
-def create_layout(items, default_name) -> html.Div:
-    return html.Div(
+def create_layout(items, default_name) -> dash.html.Div:
+    import dash
+
+    return dash.html.Div(
         [
             # Client-side state
-            dcc.Store(id="cached-items", data=items),
-            dcc.Store(id="graph-data"),
-            dcc.Store(id="panel-state", data={"open": False, "expanded": False}),
-            dcc.Store(id="fingerprints-open", data=False),
-            dcc.Store(id="layout-sink"),
-            dcc.Interval(id="refresh-items", interval=2_000),
+            dash.dcc.Store(id="cached-items", data=items),
+            dash.dcc.Store(id="graph-data"),
+            dash.dcc.Store(id="panel-state", data={"open": False, "expanded": False}),
+            dash.dcc.Store(id="fingerprints-open", data=False),
+            dash.dcc.Store(id="layout-sink"),
+            dash.dcc.Interval(id="refresh-items", interval=2_000),
             _toolbar(items, default_name),
-            html.Div(
+            dash.html.Div(
                 [
                     _graph_pane(),
-                    html.Div(
+                    dash.html.Div(
                         id="fingerprint-resize-handle",
                         className="resize-handle",
                         title="Drag to resize",

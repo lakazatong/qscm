@@ -19,7 +19,7 @@ dependencies = [
 ]
 
 [project.scripts]
-acronyms = "qscm.__main__:main"
+qscm = "qscm.__main__:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]

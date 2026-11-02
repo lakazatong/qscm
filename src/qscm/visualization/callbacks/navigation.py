@@ -3,8 +3,6 @@
 import random
 from pathlib import Path
 
-from dash import Input, Output, State, ctx, no_update
-
 from qscm.cache import discover_items, graph_files
 
 HIDDEN = "toolbar-group is-hidden"
@@ -26,26 +24,28 @@ def _random_other(names: list[str], current: str | None) -> str:
 
 
 def register(app, cache_dir: Path) -> None:
+    import dash
+
     # Single owner of item-selector's options and value.
     @app.callback(
-        Output("item-selector", "options"),
-        Output("item-selector", "value"),
-        Input("cached-items", "data"),
-        Input("prev-item", "n_clicks"),
-        Input("next-item", "n_clicks"),
-        Input("random-graph", "n_clicks"),
-        State("item-selector", "value"),
+        dash.Output("item-selector", "options"),
+        dash.Output("item-selector", "value"),
+        dash.Input("cached-items", "data"),
+        dash.Input("prev-item", "n_clicks"),
+        dash.Input("next-item", "n_clicks"),
+        dash.Input("random-graph", "n_clicks"),
+        dash.State("item-selector", "value"),
     )
     def choose_item(items, _prev, _next, _random, current):
         items = items or []
         names = [item["value"] for item in items]
-        trigger = ctx.triggered_id
+        trigger = dash.ctx.triggered_id
 
         if trigger == "prev-item":
-            return no_update, _step(names, current, -1)
+            return dash.no_update, _step(names, current, -1)
 
         if trigger == "next-item":
-            return no_update, _step(names, current, +1)
+            return dash.no_update, _step(names, current, +1)
 
         if trigger == "random-graph":
             selected = next((i for i in items if i["value"] == current), None)
@@ -53,10 +53,12 @@ def register(app, cache_dir: Path) -> None:
             # With a batch selected, "random" picks inside the batch instead
             # (see choose_graph).
             if selected is not None and selected["type"] == "batch":
-                return no_update, no_update
+                return dash.no_update, dash.no_update
 
             graphs = [i["value"] for i in items if i["type"] == "graph"]
-            return no_update, _random_other(graphs, current) if graphs else no_update
+            return dash.no_update, _random_other(
+                graphs, current
+            ) if graphs else dash.no_update
 
         # Initial call, or the list of cached items changed.
         value = current if current in names else (names[0] if names else None)
@@ -64,15 +66,15 @@ def register(app, cache_dir: Path) -> None:
 
     # Single owner of graph-selector and of the batch row's visibility.
     @app.callback(
-        Output("graph-selector", "options"),
-        Output("graph-selector", "value"),
-        Output("batch-navigation", "className"),
-        Input("item-selector", "value"),
-        Input("prev-graph", "n_clicks"),
-        Input("next-graph", "n_clicks"),
-        Input("random-graph", "n_clicks"),
-        State("graph-selector", "value"),
-        State("cached-items", "data"),
+        dash.Output("graph-selector", "options"),
+        dash.Output("graph-selector", "value"),
+        dash.Output("batch-navigation", "className"),
+        dash.Input("item-selector", "value"),
+        dash.Input("prev-graph", "n_clicks"),
+        dash.Input("next-graph", "n_clicks"),
+        dash.Input("random-graph", "n_clicks"),
+        dash.State("graph-selector", "value"),
+        dash.State("cached-items", "data"),
     )
     def choose_graph(name, _prev, _next, _random, current, items):
         item = next((i for i in items or [] if i["value"] == name), None)
@@ -91,7 +93,7 @@ def register(app, cache_dir: Path) -> None:
         if not names:
             return options, None, SHOWN
 
-        trigger = ctx.triggered_id
+        trigger = dash.ctx.triggered_id
 
         if trigger == "random-graph":
             value = _random_other(names, current)
@@ -106,10 +108,10 @@ def register(app, cache_dir: Path) -> None:
 
     # Poll the cache directory for new or deleted graphs and batches.
     @app.callback(
-        Output("cached-items", "data"),
-        Input("refresh-items", "n_intervals"),
-        State("cached-items", "data"),
+        dash.Output("cached-items", "data"),
+        dash.Input("refresh-items", "n_intervals"),
+        dash.State("cached-items", "data"),
     )
     def refresh_items(_n_intervals, current_items):
         discovered = discover_items(cache_dir)
-        return no_update if discovered == (current_items or []) else discovered
+        return dash.no_update if discovered == (current_items or []) else discovered

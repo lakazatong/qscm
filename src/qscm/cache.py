@@ -6,11 +6,15 @@ Layout of the cache directory:
     <cache>/<batch>/<name>.graph  a graph inside a batch
 """
 
+from __future__ import annotations
+
 import pickle
 import re
 from pathlib import Path
+from typing import TYPE_CHECKING
 
-import networkx as nx
+if TYPE_CHECKING:
+    import networkx as nx
 
 GRAPH_SUFFIX = ".graph"
 
@@ -70,6 +74,8 @@ def discover_items(cache_dir: Path) -> list[dict[str, str]]:
 
 
 def read_graph(path: Path) -> nx.Graph:
+    import networkx as nx
+
     with path.open("rb") as file:
         graph = pickle.load(file)
 

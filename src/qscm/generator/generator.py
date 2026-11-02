@@ -1,7 +1,11 @@
+from __future__ import annotations
+
 import random
 from collections.abc import Mapping
+from typing import TYPE_CHECKING
 
-import networkx as nx
+if TYPE_CHECKING:
+    import networkx as nx
 
 from .data import ModelSpec, SampledModel
 from .models import MODELS
@@ -52,6 +56,8 @@ class RandomGraphGenerator:
     def generate(
         self, n: int, model: str | None = None, base: SampledModel | None = None
     ) -> nx.DiGraph:
+        import networkx as nx
+
         if n < 3:
             raise ValueError("n must be at least 3.")
 

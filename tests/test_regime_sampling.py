@@ -8,7 +8,7 @@ from qscm.generator.data import SampledModel
 
 def test_every_regime_is_a_parameter_dag() -> None:
     for regimes in REGIMES.values():
-        assert all(isinstance(regime, Regime) for regime in regimes.values())
+        assert all(isinstance(get_regime(), Regime) for get_regime in regimes.values())
 
 
 @pytest.mark.parametrize("model", tuple(REGIMES))

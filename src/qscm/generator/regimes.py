@@ -862,16 +862,16 @@ def _stochastic_block_regime(
     return regime
 
 
-REGIMES: dict[str, dict[str, Regime]] = {
+REGIMES: dict[str, dict[str, Callable[..., Regime]]] = {
     "erdos_renyi": {
-        "subcritical": _er_regime(
+        "subcritical": lambda: _er_regime(
             "subcritical",
             "Below the branching threshold.",
             "branching_factor ∈ [0, 1)",
             0.0,
             1.0,
         ),
-        "critical": _er_regime(
+        "critical": lambda: _er_regime(
             "critical",
             "At the branching threshold.",
             "branching_factor = 1",
@@ -879,7 +879,7 @@ REGIMES: dict[str, dict[str, Regime]] = {
             1.0,
             include_high=True,
         ),
-        "supercritical": _er_regime(
+        "supercritical": lambda: _er_regime(
             "supercritical",
             "Above the branching threshold.",
             "branching_factor ∈ (1, n]",
@@ -888,20 +888,22 @@ REGIMES: dict[str, dict[str, Regime]] = {
             include_low=False,
             cap_at_n=True,
         ),
-        "custom": _custom_erdos_renyi_regime(),
+        "custom": lambda: _custom_erdos_renyi_regime(),
     },
     "gnm": {
-        "subcritical": _gnm_regime(
+        "subcritical": lambda: _gnm_regime(
             "subcritical", "Below the branching threshold.", "m/n < 1"
         ),
-        "critical": _gnm_regime("critical", "At the branching threshold.", "m/n = 1"),
-        "supercritical": _gnm_regime(
+        "critical": lambda: _gnm_regime(
+            "critical", "At the branching threshold.", "m/n = 1"
+        ),
+        "supercritical": lambda: _gnm_regime(
             "supercritical", "Above the branching threshold.", "m/n > 1"
         ),
-        "custom": _custom_gnm_regime(),
+        "custom": lambda: _custom_gnm_regime(),
     },
     "barabasi_albert": {
-        "tree_like": _choice_regime(
+        "tree_like": lambda: _choice_regime(
             "tree_like",
             "Minimal attachment; produces tree-like structure.",
             "m ∈ {1}",
@@ -909,7 +911,7 @@ REGIMES: dict[str, dict[str, Regime]] = {
             (1,),
             model="barabasi_albert",
         ),
-        "sparse_scale_free": _choice_regime(
+        "sparse_scale_free": lambda: _choice_regime(
             "sparse_scale_free",
             "Low attachment; favors hub formation.",
             "m ∈ {2, 3}",
@@ -917,7 +919,7 @@ REGIMES: dict[str, dict[str, Regime]] = {
             (2, 3),
             model="barabasi_albert",
         ),
-        "higher_attachment": _choice_regime(
+        "higher_attachment": lambda: _choice_regime(
             "higher_attachment",
             "More edges per arriving node.",
             "m ∈ {4, 5, 6}",
@@ -925,10 +927,10 @@ REGIMES: dict[str, dict[str, Regime]] = {
             (4, 5, 6),
             model="barabasi_albert",
         ),
-        "custom": _custom_barabasi_albert_regime(),
+        "custom": lambda: _custom_barabasi_albert_regime(),
     },
     "watts_strogatz": {
-        "regular_lattice": _watts_strogatz_regime(
+        "regular_lattice": lambda: _watts_strogatz_regime(
             "regular_lattice",
             "Preserves the initial ring lattice.",
             "p = 0",
@@ -936,14 +938,14 @@ REGIMES: dict[str, dict[str, Regime]] = {
             0.0,
             include_high=True,
         ),
-        "small_world": _watts_strogatz_regime(
+        "small_world": lambda: _watts_strogatz_regime(
             "small_world",
             "Low rewiring; retains local structure.",
             "p ∈ [0.001, 0.1)",
             0.001,
             0.1,
         ),
-        "randomized": _watts_strogatz_regime(
+        "randomized": lambda: _watts_strogatz_regime(
             "randomized",
             "Increasingly random connectivity.",
             "p ∈ [0.1, 1]",
@@ -951,10 +953,10 @@ REGIMES: dict[str, dict[str, Regime]] = {
             1.0,
             include_high=True,
         ),
-        "custom": _custom_watts_strogatz_regime(),
+        "custom": lambda: _custom_watts_strogatz_regime(),
     },
     "random_regular": {
-        "matching": _choice_regime(
+        "matching": lambda: _choice_regime(
             "matching",
             "Every node has degree 1.",
             "d ∈ {1}",
@@ -962,7 +964,7 @@ REGIMES: dict[str, dict[str, Regime]] = {
             (1,),
             model="random_regular",
         ),
-        "cycles": _choice_regime(
+        "cycles": lambda: _choice_regime(
             "cycles",
             "Every node has degree 2.",
             "d ∈ {2}",
@@ -970,7 +972,7 @@ REGIMES: dict[str, dict[str, Regime]] = {
             (2,),
             model="random_regular",
         ),
-        "moderate_degree": _choice_regime(
+        "moderate_degree": lambda: _choice_regime(
             "moderate_degree",
             "Every node has degree 3 or 4.",
             "d ∈ {3, 4}",
@@ -978,7 +980,7 @@ REGIMES: dict[str, dict[str, Regime]] = {
             (3, 4),
             model="random_regular",
         ),
-        "higher_degree": _choice_regime(
+        "higher_degree": lambda: _choice_regime(
             "higher_degree",
             "Every node has degree 5 or 6.",
             "d ∈ {5, 6}",
@@ -986,47 +988,47 @@ REGIMES: dict[str, dict[str, Regime]] = {
             (5, 6),
             model="random_regular",
         ),
-        "custom": _custom_random_regular_regime(),
+        "custom": lambda: _custom_random_regular_regime(),
     },
     "random_tree": {
-        "uniform_labeled_tree": _random_tree_regime(),
-        "custom": _custom_random_tree_regime(),
+        "uniform_labeled_tree": lambda: _random_tree_regime(),
+        "custom": lambda: _custom_random_tree_regime(),
     },
     "stochastic_block": {
-        "weak_assortative": _stochastic_block_regime(
+        "weak_assortative": lambda: _stochastic_block_regime(
             "weak_assortative",
             "Within-block probability modestly exceeds between-block probability.",
             "p_in ∈ [0.15, 0.4], p_out/p_in ∈ [0.4, 0.7]",
             (0.15, 0.4),
             p_out_ratio=(0.4, 0.7),
         ),
-        "strong_assortative": _stochastic_block_regime(
+        "strong_assortative": lambda: _stochastic_block_regime(
             "strong_assortative",
             "Within-block probability greatly exceeds between-block probability.",
             "p_in ∈ [0.35, 0.7], p_out ∈ [0.01, 0.08]",
             (0.35, 0.7),
             p_out=(0.01, 0.08),
         ),
-        "near_uniform": _stochastic_block_regime(
+        "near_uniform": lambda: _stochastic_block_regime(
             "near_uniform",
             "Within-block and between-block probabilities are similar.",
             "p_in ∈ [0.05, 0.6], p_out/p_in ∈ [0.9, 1.1]",
             (0.05, 0.6),
             p_out_ratio=(0.9, 1.1),
         ),
-        "disassortative": _stochastic_block_regime(
+        "disassortative": lambda: _stochastic_block_regime(
             "disassortative",
             "Between-block probability exceeds within-block probability.",
             "p_in ∈ [0.01, 0.08], p_out ∈ [0.2, 0.5]",
             (0.01, 0.08),
             p_out=(0.2, 0.5),
         ),
-        "custom": _custom_stochastic_block_regime(),
+        "custom": lambda: _custom_stochastic_block_regime(),
     },
 }
 
 
-def get_regimes(model: str) -> Mapping[str, Regime]:
+def get_regimes(model: str) -> Mapping[str, Callable[..., Regime]]:
     try:
         return REGIMES[model]
     except KeyError as exc:
