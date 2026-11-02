@@ -8,8 +8,7 @@ from typing import Any
 
 from qscm.cache import GRAPH_SUFFIX, save_graph, valid_name
 from qscm.config import CACHE_DIR, ensure_cache_dir
-from qscm.data import SampledModel
-from qscm.generator import DEFAULT_MODELS, REGIMES, RandomGraphGenerator
+from qscm.generator import MODELS, REGIMES, RandomGraphGenerator, SampledModel
 
 _SAMPLE_GROUPS = (
     "args",
@@ -30,7 +29,7 @@ _RESERVED_FIELDS = {"directed", "n"}
 @cache
 def _discover_fields(model: str) -> dict[tuple[str, str], Any]:
     """Map (group, name) -> default value for every option a model supports."""
-    sampled = DEFAULT_MODELS[model].sample(10, random.Random(0), None)
+    sampled = MODELS[model].sample(10, random.Random(0), None)
     fields = {}
 
     for group in _SAMPLE_GROUPS:
@@ -44,7 +43,7 @@ def _discover_fields(model: str) -> dict[tuple[str, str], Any]:
 def _dest(group: str, name: str) -> str:
     # Namespaced by group: kwargs["seed"] and postprocess_kwargs["seed"] are
     # different options and must not share an argparse destination.
-    return f"{group}__{name}"
+    return f"{group}_{name}"
 
 
 def _option_name(group: str, name: str) -> str:
@@ -74,12 +73,7 @@ def _add_model_options(parser: argparse.ArgumentParser, model: str) -> None:
                 option,
                 dest=dest,
                 choices=sorted(REGIMES[model]),
-                help="Parameter regime to sample from (see --list-regimes).",
-            )
-            parser.add_argument(
-                "--list-regimes",
-                action="store_true",
-                help="List available regimes for this graph model and exit.",
+                help=f"Parameter regime to sample from (see qscm generate regimes {model}).",
             )
             continue
 
@@ -194,10 +188,6 @@ def cache_size(args: Namespace) -> int:
 
 
 def graph_main(args: Namespace) -> int:
-    if getattr(args, "list_regimes", False):
-        print(format_regime_help(args.model))
-        return 0
-
     _require(args, "node_count")
 
     if args.model is None:
@@ -206,7 +196,7 @@ def graph_main(args: Namespace) -> int:
     else:
         generator = RandomGraphGenerator(
             seed=args.rng_seed,
-            models={args.model: DEFAULT_MODELS[args.model]},
+            models={args.model: MODELS[args.model]},
         )
         graph = generator.generate(
             args.node_count, model=args.model, base=_make_base(args)
@@ -225,10 +215,6 @@ def graph_main(args: Namespace) -> int:
 
 
 def batch_main(args: Namespace) -> int:
-    if getattr(args, "list_regimes", False):
-        print(format_regime_help(args.model))
-        return 0
-
     _require(args, "name", "count", "node_range")
 
     if not valid_name(args.name):
@@ -255,7 +241,7 @@ def batch_main(args: Namespace) -> int:
     minimum, maximum = args.node_range
     node_rng = random.Random(args.rng_seed)
 
-    models = {args.model: DEFAULT_MODELS[args.model]} if args.model else None
+    models = {args.model: MODELS[args.model]} if args.model else None
     generator = RandomGraphGenerator(seed=args.rng_seed, models=models)
     base = _make_base(args) if args.model else None
 
@@ -330,7 +316,7 @@ def _add_batch_options(parser: argparse.ArgumentParser) -> None:
 
 
 def _add_model_subparsers(subparsers, add_common_options, func) -> None:
-    for model in DEFAULT_MODELS:
+    for model in MODELS:
         model_parser = subparsers.add_parser(model)
         add_common_options(model_parser)
         _add_model_options(model_parser, model)
@@ -344,6 +330,11 @@ def _add_model_subparsers(subparsers, add_common_options, func) -> None:
     random_parser.set_defaults(func=func, model=None)
 
 
+def regimes_main(args: Namespace) -> int:
+    print(format_regime_help(args.model))
+    return 0
+
+
 def register_graph_parser(commands) -> None:
     parser = commands.add_parser("graph", help="Generate one graph.")
     subparsers = parser.add_subparsers(dest="model_command", required=True)
@@ -354,6 +345,15 @@ def register_batch_parser(commands) -> None:
     parser = commands.add_parser("batch", help="Generate a batch of graphs.")
     subparsers = parser.add_subparsers(dest="model_command", required=True)
     _add_model_subparsers(subparsers, _add_batch_options, batch_main)
+
+
+def register_regimes_parser(subparsers) -> None:
+    parser = subparsers.add_parser(
+        "regimes",
+        help="List available parameter regimes for a graph model.",
+    )
+    parser.add_argument("model", choices=sorted(REGIMES))
+    parser.set_defaults(func=regimes_main)
 
 
 def register_parser(subparsers) -> None:
@@ -369,3 +369,4 @@ def register_parser(subparsers) -> None:
 
     register_graph_parser(generate_subparsers)
     register_batch_parser(generate_subparsers)
+    register_regimes_parser(generate_subparsers)
