@@ -3,7 +3,7 @@ from __future__ import annotations
 import math
 import re
 from collections.abc import Callable, Iterable, Mapping
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from numbers import Real
 from typing import TYPE_CHECKING, Any, cast
 
@@ -31,7 +31,7 @@ class Variable:
 
 
 @dataclass(frozen=True)
-class _Equation:
+class Equation:
     source: str
     relation: sp.Equality
     symbols: frozenset[str]
@@ -42,20 +42,21 @@ class _Equation:
 class ParameterDAG:
     """Resolve declared variables by equation deduction and fallback sampling."""
 
-    variables: Mapping[str, Variable] | None = None
-    equations: Iterable[str] = ()
-    rel_tol: float = 1e-9
-    abs_tol: float = 1e-12
-    _variables: dict[str, Variable] = field(default_factory=dict, init=False)
-    _symbols: dict[str, sp.Symbol] = field(default_factory=dict, init=False)
-    _equations: list[_Equation] = field(default_factory=list, init=False)
+    def __init__(
+        self,
+        variables: Mapping[str, Variable] | None = None,
+        equations: Iterable[str] = (),
+        *,
+        rel_tol: float = 1e-9,
+        abs_tol: float = 1e-12,
+    ) -> None:
+        self._variables: dict[str, Variable] = {}
+        self._symbols: dict[str, sp.Symbol] = {}
+        self._equations: list[Equation] = []
+        self.rel_tol = rel_tol
+        self.abs_tol = abs_tol
 
-    def __post_init__(self) -> None:
-        initial_variables = dict(self.variables or {})
-        initial_equations = tuple(self.equations)
-        self.variables = None
-        self.equations = ()
-        for name, variable in initial_variables.items():
+        for name, variable in (variables or {}).items():
             if not isinstance(variable, Variable):
                 raise TypeError(f"Variable definition for {name!r} must be a Variable.")
             self.add_variable(
@@ -65,16 +66,17 @@ class ParameterDAG:
                 order=variable.order,
                 description=variable.description,
             )
-        for equation in initial_equations:
+
+        for equation in equations:
             self.add_equation(equation)
 
     @property
-    def variable_names(self) -> frozenset[str]:
-        return frozenset(self._variables)
+    def variables(self) -> Mapping[str, Variable]:
+        return self._variables.copy()
 
     @property
-    def parameter_names(self) -> frozenset[str]:
-        return self.variable_names
+    def equations(self) -> Iterable[Equation]:
+        return tuple(self._equations)
 
     def add_variable(
         self,
@@ -110,28 +112,6 @@ class ParameterDAG:
         self._symbols[name] = sp.Symbol(name)
         return self
 
-    def add(
-        self,
-        name: str,
-        *,
-        sampler: Sampler | None = None,
-        sample: Sampler | None = None,
-        validate: Validator | None = None,
-        order: int | None = None,
-        description: str | None = None,
-        override: bool = False,
-    ) -> ParameterDAG:
-        if sampler is not None and sample is not None:
-            raise TypeError("Provide either sample or sampler, not both.")
-        return self.add_variable(
-            name,
-            sample=sample if sample is not None else sampler,
-            validate=validate,
-            order=order,
-            description=description,
-            override=override,
-        )
-
     def remove_variable(self, name: str) -> ParameterDAG:
         if name not in self._variables:
             raise ValueError(f"Unknown variable {name!r}.")
@@ -146,7 +126,12 @@ class ParameterDAG:
         del self._symbols[name]
         return self
 
-    def add_equation(self, equation: str) -> ParameterDAG:
+    def add_equation(
+        self,
+        equation: str,
+        *,
+        description: str | None = None,
+    ) -> ParameterDAG:
         import sympy as sp
 
         if not isinstance(equation, str):
@@ -178,25 +163,10 @@ class ParameterDAG:
         if expression == 0:
             raise ValueError(f"Equation {equation!r} imposes no constraint.")
 
-        candidate = _Equation(equation, relation, symbols)
+        candidate = Equation(equation, relation, symbols, description)
         self._validate_equation_unambiguous(candidate)
         self._validate_equation_consistency((*self._equations, candidate))
         self._equations.append(candidate)
-        return self
-
-    def equation(
-        self, equation: str, *, description: str | None = None
-    ) -> ParameterDAG:
-        if description is None:
-            return self.add_equation(equation)
-        match = re.fullmatch(r"\s*(.*?)\s*(?<![<>=!])=(?!=)\s*(.*?)\s*", equation)
-        if match is None:
-            raise ValueError(f"Invalid equation {equation!r}.")
-        self.add_equation(equation)
-        added = self._equations[-1]
-        self._equations[-1] = _Equation(
-            added.source, added.relation, added.symbols, description
-        )
         return self
 
     def remove_equation(self, equation: str) -> ParameterDAG:
@@ -404,7 +374,7 @@ class ParameterDAG:
         return left == right
 
     @staticmethod
-    def _validate_equation_unambiguous(equation: _Equation) -> None:
+    def _validate_equation_unambiguous(equation: Equation) -> None:
         import sympy as sp
 
         for name in equation.symbols:
@@ -428,7 +398,7 @@ class ParameterDAG:
                 )
 
     @staticmethod
-    def _validate_equation_consistency(equations: Iterable[_Equation]) -> None:
+    def _validate_equation_consistency(equations: Iterable[Equation]) -> None:
         import sympy as sp
 
         equations = tuple(equations)

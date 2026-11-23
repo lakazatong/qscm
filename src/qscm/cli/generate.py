@@ -3,21 +3,16 @@ import json
 import random
 import shutil
 from argparse import Namespace
+from dataclasses import asdict
 from functools import cache
 from typing import Any
 
+from rich.progress import track
+
 from qscm.cache import GRAPH_SUFFIX, save_graph, valid_name
 from qscm.config import CACHE_DIR, ensure_cache_dir
-from qscm.generator import MODELS, REGIMES, RandomGraphGenerator, SampledModel
-
-_SAMPLE_GROUPS = (
-    "args",
-    "kwargs",
-    "parameters",
-    "postprocess_kwargs",
-)
-_RESERVED_FIELDS = {"directed", "n"}
-
+from qscm.generator import RandomGraphGenerator
+from qscm.models import MODELS, SampledModel
 
 # --- Option discovery -------------------------------------------------------
 #
@@ -27,29 +22,29 @@ _RESERVED_FIELDS = {"directed", "n"}
 
 
 @cache
-def _discover_fields(model: str) -> dict[tuple[str, str], Any]:
-    """Map (group, name) -> default value for every option a model supports."""
-    sampled = MODELS[model].sample(10, random.Random(0), None, mockup=True)
-    fields = {}
+def _discover_fields(model: str) -> dict[str, dict[str, Any]]:
+    """Map each group to its supported options and default values."""
+    sampled = asdict(MODELS[model].sample(10, random.Random(42), mockup=True))
 
-    for group in _SAMPLE_GROUPS:
-        for name, default in (getattr(sampled, group, None) or {}).items():
-            if name not in _RESERVED_FIELDS:
-                fields[(group, name)] = default
-
-    return fields
+    return {
+        group: {
+            name: default
+            for name, default in (values or {}).items()
+            if name not in {"directed", "n"}
+        }
+        for group, values in sampled.items()
+    }
 
 
 def _dest(group: str, name: str) -> str:
-    # Namespaced by group: kwargs["seed"] and postprocess_kwargs["seed"] are
+    # Namespaced by group: kwargs["seed"] are
     # different options and must not share an argparse destination.
     return f"{group}_{name}"
 
 
 def _option_name(group: str, name: str) -> str:
     """Return the CLI spelling for a SampledModel field."""
-    prefix = "--postprocess-" if group == "postprocess_kwargs" else "--"
-    return prefix + name.replace("_", "-")
+    return "--" + name.replace("_", "-")
 
 
 def _argument_type(default):
@@ -64,42 +59,44 @@ def _argument_type(default):
 
 def _add_model_options(parser: argparse.ArgumentParser, model: str) -> None:
     """Add only the options supported by the selected model."""
-    for (group, name), default in _discover_fields(model).items():
-        option = _option_name(group, name)
-        dest = _dest(group, name)
+    for group, values in _discover_fields(model).items():
+        for name, default in values.items():
+            option = _option_name(group, name)
+            dest = _dest(group, name)
 
-        if group == "parameters" and name == "regime":
+            if group == "parameters" and name == "regime":
+                parser.add_argument(
+                    option,
+                    dest=dest,
+                    choices=sorted(MODELS[model].regimes),
+                    help=f"Parameter regime to sample from (see qscm generate regimes {model}).",
+                )
+                continue
+
             parser.add_argument(
                 option,
                 dest=dest,
-                choices=sorted(REGIMES[model]),
-                help=f"Parameter regime to sample from (see qscm generate regimes {model}).",
+                type=_argument_type(default),
+                default=None,
+                help=f"Override SampledModel.{group}[{name!r}]",
             )
-            continue
-
-        parser.add_argument(
-            option,
-            dest=dest,
-            type=_argument_type(default),
-            default=None,
-            help=f"Override SampledModel.{group}[{name!r}]",
-        )
 
 
 def _make_base(args: Namespace) -> SampledModel:
     """Build a partial SampledModel from explicitly supplied CLI options."""
-    overrides: dict[str, dict[str, Any]] = {group: {} for group in _SAMPLE_GROUPS}
+    discovered = _discover_fields(args.model)
+    overrides = {group: {} for group in discovered}
 
-    for group, name in _discover_fields(args.model):
-        value = getattr(args, _dest(group, name), None)
-        if value is not None:
-            overrides[group][name] = value
+    for group, values in discovered.items():
+        for name in values:
+            value = getattr(args, _dest(group, name), None)
+            if value is not None:
+                overrides[group][name] = value
 
     return SampledModel(
         args=overrides["args"],
         kwargs=overrides["kwargs"],
         parameters=overrides["parameters"],
-        postprocess_kwargs=overrides["postprocess_kwargs"] or None,
     )
 
 
@@ -108,7 +105,7 @@ def _make_base(args: Namespace) -> SampledModel:
 
 def format_regime_help(model: str) -> str:
     helps = []
-    for name, get_regime in REGIMES[model].items():
+    for name, get_regime in MODELS[model].regimes.items():
         regime = get_regime()
         helps.append(f"  {name:<22} {regime.format():<32} {regime.description}")
     return "\n".join(helps)
@@ -246,7 +243,7 @@ def batch_main(args: Namespace) -> int:
     generator = RandomGraphGenerator(seed=args.rng_seed, models=models)
     base = _make_base(args) if args.model else None
 
-    for _ in range(args.count):
+    for _ in track(range(args.count), description="Generating graphs"):
         node_count = node_rng.randint(minimum, maximum)
         graph = generator.generate(node_count, model=args.model, base=base)
         save_graph(
@@ -353,7 +350,7 @@ def register_regimes_parser(subparsers) -> None:
         "regimes",
         help="List available parameter regimes for a graph model.",
     )
-    parser.add_argument("model", choices=sorted(REGIMES))
+    parser.add_argument("model", choices=sorted(MODELS.keys()))
     parser.set_defaults(func=regimes_main)
 
 

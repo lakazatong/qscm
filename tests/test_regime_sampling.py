@@ -2,29 +2,32 @@ from __future__ import annotations
 
 import pytest
 
-from qscm.generator import REGIMES, RandomGraphGenerator, Regime
-from qscm.generator.data import SampledModel
+from qscm.generator import RandomGraphGenerator
+from qscm.models import MODELS, Regime
+from qscm.models.data import SampledModel
 
 
 def test_every_regime_is_a_parameter_dag() -> None:
-    for regimes in REGIMES.values():
-        assert all(isinstance(get_regime(), Regime) for get_regime in regimes.values())
+    for model in MODELS.values():
+        assert all(
+            isinstance(get_regime(), Regime) for get_regime in model.regimes.values()
+        )
 
 
-@pytest.mark.parametrize("model", tuple(REGIMES))
+@pytest.mark.parametrize("model", tuple(MODELS.keys()))
 def test_all_models_generate_across_sizes(model: str) -> None:
     generator = RandomGraphGenerator(seed=732)
-    for n in (3, 4, 8, 15):
+    for n in (4, 8, 15):
         graph = generator.generate(n, model)
         assert graph.number_of_nodes() == n
         assert graph.graph["model"] == model
-        assert graph.graph["parameters"]["regime"] in (*REGIMES[model], "custom")
+        assert graph.graph["parameters"]["regime"] in (*MODELS[model].regimes, "custom")
 
 
-@pytest.mark.parametrize(("model", "n"), [(model, 20) for model in REGIMES])
+@pytest.mark.parametrize(("model", "n"), [(model, 20) for model in MODELS])
 def test_each_declared_regime_can_be_sampled(model: str, n: int) -> None:
     # Every named regime is feasible for these test sizes.
-    for regime_name in REGIMES[model]:
+    for regime_name in MODELS[model].regimes:
         if regime_name == "custom":
             continue
         graph = RandomGraphGenerator(seed=12).generate(

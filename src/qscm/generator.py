@@ -7,8 +7,8 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     import networkx as nx
 
-from .data import ModelSpec, SampledModel
 from .models import MODELS
+from .models.data import ModelSpec, SampledModel
 
 # --- Helpers ---
 
@@ -56,11 +56,6 @@ class RandomGraphGenerator:
     def generate(
         self, n: int, model: str | None = None, base: SampledModel | None = None
     ) -> nx.DiGraph:
-        import networkx as nx
-
-        if n < 3:
-            raise ValueError("n must be at least 3.")
-
         if model is None:
             model = self._rng.choice(tuple(self.models.keys()))
         elif model not in self.models:
@@ -70,38 +65,24 @@ class RandomGraphGenerator:
 
         spec = self.models[model]
         # this rng will be ignored if base contains everything this sampler needs
-        model_rng = random.Random(self._rng.randrange(2**32))
-        sampled = spec.sample(n, model_rng, base)
+        sampled = spec.sample(n, base=base, rng=self._rng)
 
         nx_arguments = {
-            "function": spec.nx_function,
             "args": sampled.args.copy(),
             "kwargs": sampled.kwargs.copy(),
         }
 
-        nx_function = getattr(nx, spec.nx_function)
-        G = nx_function(**sampled.args, **sampled.kwargs)
+        G = spec.nx_function(**sampled.args, **sampled.kwargs)
 
         parameters = sampled.parameters.copy()
-        regime = parameters.get("regime", "unspecified")
+        regime = parameters.get("regime", None)
+        assert regime is not None
         metadata = {
             "name": graph_filename(model, regime, nx_arguments),
             "model": model,
             "nx_arguments": nx_arguments,
             "parameters": parameters,
-            "postprocessing": [],
         }
-
-        if spec.postprocess is not None:
-            postprocess_kwargs = sampled.postprocess_kwargs or {}
-            G = spec.postprocess(G, **postprocess_kwargs)
-            metadata["postprocessing"].append(
-                {
-                    "function": spec.postprocess.__name__,
-                    "args": {},
-                    "kwargs": postprocess_kwargs.copy(),
-                }
-            )
 
         G.graph.clear()
         G.graph.update(metadata)

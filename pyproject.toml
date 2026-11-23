@@ -16,6 +16,7 @@ dependencies = [
     "scipy",
     "watchdog>=6.0.0",
     "sympy",
+    "rich",
 ]
 
 [project.scripts]
@@ -23,3 +24,8 @@ qscm = "qscm.__main__:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
+
+[dependency-groups]
+dev = [
+    "snakeviz>=2.2.2",
+]
